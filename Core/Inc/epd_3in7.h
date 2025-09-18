@@ -35,57 +35,67 @@
 #include <stdint.h>
 #include <stdio.h>
 
-// ===============================
-// === CONFIGURATION SECTION
-// ===============================
+typedef struct
+{
+    GPIO_TypeDef *reset_port;
+    uint16_t reset_pin;
 
-// GPIO pins used to interface with the e-Paper
-#define EPD_RST_PIN GPIOB, GPIO_PIN_1
-#define EPD_DC_PIN GPIOB, GPIO_PIN_0
-#define EPD_BUSY_PIN GPIOB, GPIO_PIN_2
-#define EPD_MOSI_PIN GPIOB, GPIO_PIN_15
-#define EPD_SCLK_PIN GPIOB, GPIO_PIN_13
-#define EPD_CS_PIN GPIOB, GPIO_PIN_14
+    GPIO_TypeDef *dc_port;
+    uint16_t dc_pin;
 
-// ===============================
-// === STM32 INTEGRATION
-// ===============================
+    GPIO_TypeDef *busy_port;
+    uint16_t busy_pin;
 
-// Waveshare data types:
-#define UBYTE uint8_t
-#define UWORD uint16_t
-#define UDOUBLE uint32_t
+    GPIO_TypeDef *cs_port;
+    uint16_t cs_pin;
+} epd3in7_pins;
 
-// Waveshare funcs:
-#define DEV_Digital_Write(_pin, _value) HAL_GPIO_WritePin(_pin, _value == 0 ? GPIO_PIN_RESET : GPIO_PIN_SET)
-#define DEV_Digital_Read(_pin) HAL_GPIO_ReadPin(_pin)
-#define DEV_Delay_ms(__xms) HAL_Delay(__xms);
+typedef struct
+{
+    uint16_t width;
+    uint16_t height;
+    epd3in7_pins pins;
+    SPI_HandleTypeDef *spi_handle;
+} epd3in7_handle;
 
-// SPI write func to be implemented in .c file
-void DEV_SPI_WriteByte(UBYTE value);
+typedef enum
+{
+    EPD_3IN7_MODE_GC = 1,
+    EPD_3IN7_MODE_DU = 2,
+    EPD_3IN7_MODE_A2 = 3
+} epd3in7_mode;
 
-// ===============================
-// === DRIVER
-// ===============================
+typedef enum
+{
+    EPD_3IN7_LUT_4_GRAY_GC = 0,
+    EPD_3IN7_LUT_1_GRAY_GC = 1,
+    EPD_3IN7_LUT_1_GRAY_DU = 2,
+    EPD_3IN7_LUT_1_GRAY_A2 = 3
+} epd3in7_lut_type;
 
-// Display resolution
 #define EPD_3IN7_WIDTH 280
 #define EPD_3IN7_HEIGHT 480
+#define EPD_SPI_TIMEOUT 1000
+
+/**
+ * Create the e-Paper handle with given pin configuration
+ */
+epd3in7_handle epd3in7_create(const epd3in7_pins pins, const SPI_HandleTypeDef *spi_handle);
 
 /**
  * Clear screen using GC LUT
  */
-void EPD_3IN7_4Gray_Clear(void);
+void epd3in7_clear_4_gray(const epd3in7_handle *handle);
 
 /**
  * Initialize the e-Paper registers for 4-gray level display
  */
-void EPD_3IN7_4Gray_Init(void);
+void epd3in7_init_4_gray(const epd3in7_handle *handle);
 
 /**
  * Send the 4-gray level image buffer to e-Paper and refresh the display
  */
-void EPD_3IN7_4Gray_Display(const UBYTE *Image);
+void epd3in7_display_4_gray(const epd3in7_handle *handle, const uint8_t *image);
 
 /**
  * Clear screen using GC LUT
@@ -94,12 +104,12 @@ void EPD_3IN7_4Gray_Display(const UBYTE *Image);
  *   2 = DU; Direct update (partial),
  *   3 = A2; Fast, but worse direct update (partial),
  */
-void EPD_3IN7_1Gray_Clear(UBYTE mode);
+void epd3in7_clear_1_gray(const epd3in7_handle *handle, const epd3in7_mode mode);
 
 /**
  * Initialize the e-Paper registers for 1-gray level display
  */
-void EPD_3IN7_1Gray_Init(void);
+void epd3in7_init_1_gray(const epd3in7_handle *handle);
 
 /**
  * Send the 1-gray level image buffer to e-Paper and refresh the display
@@ -107,33 +117,24 @@ void EPD_3IN7_1Gray_Init(void);
  *   2 = DU; Direct update (partial),
  *   3 = A2; Fast, but worse direct update (partial),
  */
-void EPD_3IN7_1Gray_Display(const UBYTE *Image, UBYTE mode);
-
-/**
- * Send the part of the 1-gray level image buffer to e-Paper and refresh the display
- *
- * Notes from Waveshare:
- * You can send a part of data to e-Paper,But this function is not recommended
- * 1. Xsize must be as big as EPD_3IN7_WIDTH
- * 2. Ypointer must be start at 0
- * 3. You cannot refresh them with the partial refresh mode all the time.
- *    After refreshing partially several times, you need to fully refresh EPD once.
- *    Otherwise, the display effect will be abnormal, which cannot be repaired!
- *
- * Notes from Sandro:
- * 1. Before partial update you need to run at least once at least once full width/height background image in DU mode.
- *    You can use for this any of the DU display funcs: `EPD_3IN7_1Gray_Display()`, `EPD_3IN7_1Gray_Display_Top()`, or `EPD_3IN7_1Gray_Display_Part()`.
- *    Otherwise after partial update the rest of the image will be blank.
- *    After this "initial run", you can run it multiple times.
- * 2. Should'nt be called after Clear() without a full Display() in between.
- * 3. Because of these problems on 3IN7 (thank you Waveshare), consider using simpler alternative `int EPD_3IN7_1Gray_Display_Top()`.
- */
-int EPD_3IN7_1Gray_Display_Part(const UBYTE *Image, UWORD Xstart, UWORD Ystart, UWORD Xend, UWORD Yend);
+void epd3in7_display_1_gray(const epd3in7_handle *handle, const uint8_t *image, const epd3in7_mode mode);
 
 /**
  * Send the top part of the 1-gray level image buffer to e-Paper and refresh the display
+ *
+ * Notes:
+ * - You cannot refresh them with the partial refresh mode all the time.
+ *   After refreshing partially several times, you need to fully refresh EPD once.
+ *   Otherwise, the display effect will be abnormal, which cannot be repaired!
+ *
+ * - Before partial update you need to run at least once at least once full width/height background image in DU mode.
+ *   You can use for this any of the DU display funcs: `epd3in7_display_1_gray()`, `epd3in7_display_1_gray_top()`.
+ *   Otherwise after partial update the rest of the image will be blank.
+ *   After this "initial run", you can run it multiple times.
+ *
+ * - Should'nt be called after Clear() without a full Display() in between.
  */
-int EPD_3IN7_1Gray_Display_Top(const UBYTE *Image, UWORD Yend_exclusive);
+int epd3in7_display_1_gray_top(const epd3in7_handle *handle, const uint8_t *image, const uint16_t y_end_exclusive);
 
 /**
  * Enter sleep mode
@@ -142,4 +143,4 @@ int EPD_3IN7_1Gray_Display_Top(const UBYTE *Image, UWORD Yend_exclusive);
  * When the screen is not refreshed, please set the screen to sleep mode or power off it.
  * Otherwise, the screen will remain in a high voltage state for a long time, which will damage the e-Paper and cannot be repaired!
  */
-void EPD_3IN7_Sleep(void);
+void epd3in7_sleep(const epd3in7_handle *handle);

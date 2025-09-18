@@ -50,7 +50,7 @@ COM_InitTypeDef BspCOMInit;
 /* USER CODE BEGIN PV */
 
 // Buffer for the full black/white image (1bpp)
-static UBYTE frame_bw[(EPD_3IN7_WIDTH * EPD_3IN7_HEIGHT) / 8];
+static uint8_t frame_bw[(EPD_3IN7_WIDTH * EPD_3IN7_HEIGHT) / 8];
 
 // Rectangle parameters
 #define RECT_W 80
@@ -59,38 +59,38 @@ static UBYTE frame_bw[(EPD_3IN7_WIDTH * EPD_3IN7_HEIGHT) / 8];
 #define RECT_Y ((EPD_3IN7_HEIGHT - RECT_H) / 2)
 #define STRIP_H (RECT_Y + RECT_H) // We are sending 0..(RECT_Y + RECT_H - 1)
 
-static UBYTE strip_buf[(EPD_3IN7_WIDTH * STRIP_H) / 8];
+static uint8_t strip_buf[(EPD_3IN7_WIDTH * STRIP_H) / 8];
 
 // Helper: bytes per row in the full image
-static inline UWORD bytes_per_row(void) { return (EPD_3IN7_WIDTH / 8); }
+static inline uint16_t bytes_per_row(void) { return (EPD_3IN7_WIDTH / 8); }
 
 // Helper: bytes for given number of rows
-static inline UWORD rows_to_bytes(UWORD rows) { return rows * bytes_per_row(); }
+static inline uint16_t rows_to_bytes(uint16_t rows) { return rows * bytes_per_row(); }
 
 // Copy from the shadow buffer to the strip buffer
-static void strip_copy_from_shadow(UBYTE *dst_strip, const UBYTE *shadow, UWORD rows)
+static void strip_copy_from_shadow(uint8_t *dst_strip, const uint8_t *shadow, uint16_t rows)
 {
   memcpy(dst_strip, shadow, rows_to_bytes(rows));
 }
 
 // Copy back the TOP strip to the shadow buffer
-static void strip_copy_to_shadow(UBYTE *shadow, const UBYTE *src_strip, UWORD rows)
+static void strip_copy_to_shadow(uint8_t *shadow, const uint8_t *src_strip, uint16_t rows)
 {
   memcpy(shadow, src_strip, rows_to_bytes(rows));
 }
 
 // Draw a filled square (black/white) on the strip buffer
-static void draw_filled_square_on_strip(UBYTE *strip, UBYTE is_black)
+static void draw_filled_square_on_strip(uint8_t *strip, uint8_t is_black)
 {
-  for (UWORD y = 0; y < RECT_H; y++)
+  for (uint16_t y = 0; y < RECT_H; y++)
   {
-    UWORD gy = RECT_Y + y;
-    UWORD row_base = gy * bytes_per_row();
-    for (UWORD x = 0; x < RECT_W; x++)
+    uint16_t gy = RECT_Y + y;
+    uint16_t row_base = gy * bytes_per_row();
+    for (uint16_t x = 0; x < RECT_W; x++)
     {
-      UWORD gx = RECT_X + x;
-      UWORD idx = row_base + (gx >> 3);
-      UBYTE mask = (0x80 >> (gx & 7));
+      uint16_t gx = RECT_X + x;
+      uint16_t idx = row_base + (gx >> 3);
+      uint8_t mask = (0x80 >> (gx & 7));
       if (is_black)
       {
         strip[idx] &= ~mask; // black (bit=0)
@@ -104,17 +104,17 @@ static void draw_filled_square_on_strip(UBYTE *strip, UBYTE is_black)
 }
 
 // Draw a checkerboard pattern on the full shadow buffer
-static void draw_checker_full(void)
+static void draw_checker_full()
 {
   memset(frame_bw, 0xFF, sizeof(frame_bw)); // start with all white
 
-  for (UWORD y = 0; y < EPD_3IN7_HEIGHT; y++)
+  for (uint16_t y = 0; y < EPD_3IN7_HEIGHT; y++)
   {
-    for (UWORD x = 0; x < EPD_3IN7_WIDTH; x++)
+    for (uint16_t x = 0; x < EPD_3IN7_WIDTH; x++)
     {
       if (((x >> 4) ^ (y >> 4)) & 1)
       {
-        UWORD idx = (y * (EPD_3IN7_WIDTH / 8)) + (x >> 3);
+        uint16_t idx = (y * (EPD_3IN7_WIDTH / 8)) + (x >> 3);
         frame_bw[idx] &= ~(0x80 >> (x & 7));
       }
     }
@@ -188,17 +188,28 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
-  EPD_3IN7_1Gray_Init();
-  EPD_3IN7_1Gray_Clear(1); // 1 = GC
+  epd3in7_handle epd3in7 = epd3in7_create((epd3in7_pins){
+                                              .reset_port = DISP_RST_GPIO_Port,
+                                              .reset_pin = DISP_RST_Pin,
+                                              .dc_port = DISP_DC_GPIO_Port,
+                                              .dc_pin = DISP_DC_Pin,
+                                              .busy_port = DISP_BUSY_GPIO_Port,
+                                              .busy_pin = DISP_BUSY_Pin,
+                                              .cs_port = DISP_CS_GPIO_Port,
+                                              .cs_pin = DISP_CS_Pin},
+                                          &hspi2);
 
-  UBYTE black = 1;              // starting with black square
-  UBYTE partial_since_full = 0; // count partial updates since last full refresh
-  UBYTE toggles = 0;            // total square color toggles
+  epd3in7_init_1_gray(&epd3in7);
+  epd3in7_clear_1_gray(&epd3in7, 1); // 1 = GC
+
+  uint8_t black = 1;              // starting with black square
+  uint8_t partial_since_full = 0; // count partial updates since last full refresh
+  uint8_t toggles = 0;            // total square color toggles
 
   // One-time "top full" push so partials won't blank the rest
   draw_checker_full();
-  EPD_3IN7_1Gray_Display(frame_bw, 1); // GC
-  EPD_3IN7_1Gray_Display(frame_bw, 2); // DU
+  epd3in7_display_1_gray(&epd3in7, frame_bw, 1); // GC
+  epd3in7_display_1_gray(&epd3in7, frame_bw, 2); // DU
 
   while (1)
   {
@@ -209,7 +220,7 @@ int main(void)
     draw_filled_square_on_strip(strip_buf, black);
 
     // 3) Send the partial update (top stripe only)
-    EPD_3IN7_1Gray_Display_Top(strip_buf, STRIP_H);
+    epd3in7_display_1_gray_top(&epd3in7, strip_buf, STRIP_H);
 
     // 4) Update shadow buffer so the next partial starts from the latest image
     strip_copy_to_shadow(frame_bw, strip_buf, STRIP_H);
@@ -223,14 +234,14 @@ int main(void)
     if (partial_since_full >= 5)
     {
       // Full-screen refresh with the current shadow buffer
-      EPD_3IN7_1Gray_Display(frame_bw, 2); // DU
+      epd3in7_display_1_gray(&epd3in7, frame_bw, 2); // DU
       partial_since_full = 0;
     }
 
     // 7) After 20 toggles, put the panel to sleep and stop using it
     if (toggles >= 20)
     {
-      EPD_3IN7_Sleep();
+      epd3in7_sleep(&epd3in7);
       break; // exit the loop; do not touch the panel anymore
     }
 

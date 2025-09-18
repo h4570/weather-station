@@ -4,6 +4,7 @@
         "epd_config.h": "c",
         "stm32g4xx_hal.h": "c",
         "type_traits": "c",
-        "epd_3in7.h": "c"
+        "epd_3in7.h": "c",
+        "stm32g4xx_hal_gpio.h": "c"
     }
 }
