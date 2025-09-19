@@ -107,6 +107,27 @@ extern "C"
      */
     epd3in7_driver_handle epd3in7_driver_create(const epd3in7_driver_pins pins, SPI_HandleTypeDef *spi_handle, const bool busy_active_high);
 
+    /**
+     * @brief Wait until the display is no longer busy (wait for draw to finish)
+     *
+     * @param handle Pointer to the e-Paper display handle
+     * @return epd3in7_driver_status Operation status
+     */
+    epd3in7_driver_status epd3in7_driver_busy_wait_for_idle(const epd3in7_driver_handle *handle);
+
+    /**
+     * @brief Enter sleep mode to conserve power and protect the display
+     *
+     * @param handle Pointer to the e-Paper display handle
+     * @return epd3in7_driver_status Operation status
+     *
+     * @note IMPORTANT: The display cannot be powered on for extended periods.
+     * When the display is not being refreshed, always put it into sleep mode or power it off.
+     * Otherwise, the display will remain in a high voltage state for a long time,
+     * which will permanently damage the e-Paper and cannot be repaired!
+     */
+    epd3in7_driver_status epd3in7_driver_sleep(epd3in7_driver_handle *handle);
+
     /* ---- 4-Gray Level Functions ---- */
 
     /**
@@ -121,20 +142,18 @@ extern "C"
      * @brief Clear screen using 4-gray level mode (GC LUT)
      *
      * @param handle Pointer to the e-Paper display handle
-     * @param wait If true, wait until the display is ready (not busy) before returning. `false` preferred
      * @return epd3in7_driver_status Operation status
      */
-    epd3in7_driver_status epd3in7_driver_clear_4_gray(epd3in7_driver_handle *handle, const bool wait);
+    epd3in7_driver_status epd3in7_driver_clear_4_gray(epd3in7_driver_handle *handle);
 
     /**
      * @brief Send the 4-gray level image buffer to e-Paper and refresh the display
      *
      * @param handle Pointer to the e-Paper display handle
      * @param image Pointer to the 4-gray level image buffer
-     * @param wait If true, wait until the display is ready (not busy) before returning. `false` preferred
      * @return epd3in7_driver_status Operation status
      */
-    epd3in7_driver_status epd3in7_driver_display_4_gray(epd3in7_driver_handle *handle, const uint8_t *image, const bool wait);
+    epd3in7_driver_status epd3in7_driver_display_4_gray(epd3in7_driver_handle *handle, const uint8_t *image);
 
     /* ---- 1-Gray Level (Black & White) Functions ---- */
 
@@ -154,10 +173,9 @@ extern "C"
      *             - EPD3IN7_DRIVER_MODE_GC: Global clear (full refresh)
      *             - EPD3IN7_DRIVER_MODE_DU: Direct update (partial refresh)
      *             - EPD3IN7_DRIVER_MODE_A2: Fast but lower quality partial refresh
-     * @param wait If true, wait until the display is ready (not busy) before returning. `false` preferred
      * @return epd3in7_driver_status Operation status
      */
-    epd3in7_driver_status epd3in7_driver_clear_1_gray(epd3in7_driver_handle *handle, const epd3in7_driver_mode mode, const bool wait);
+    epd3in7_driver_status epd3in7_driver_clear_1_gray(epd3in7_driver_handle *handle, const epd3in7_driver_mode mode);
 
     /**
      * @brief Send the 1-gray level (black & white) image buffer to e-Paper and refresh the display
@@ -168,10 +186,9 @@ extern "C"
      *             - EPD3IN7_DRIVER_MODE_GC: Global clear (full refresh)
      *             - EPD3IN7_DRIVER_MODE_DU: Direct update (partial refresh)
      *             - EPD3IN7_DRIVER_MODE_A2: Fast but lower quality partial refresh
-     * @param wait If true, wait until the display is ready (not busy) before returning. `false` preferred
      * @return epd3in7_driver_status Operation status
      */
-    epd3in7_driver_status epd3in7_driver_display_1_gray(epd3in7_driver_handle *handle, const uint8_t *image, const epd3in7_driver_mode mode, const bool wait);
+    epd3in7_driver_status epd3in7_driver_display_1_gray(epd3in7_driver_handle *handle, const uint8_t *image, const epd3in7_driver_mode mode);
 
     /**
      * @brief Send the top part of the 1-gray level (black & white) image buffer to e-Paper
@@ -184,7 +201,6 @@ extern "C"
      *             - EPD3IN7_DRIVER_MODE_GC: Global clear (full refresh)
      *             - EPD3IN7_DRIVER_MODE_DU: Direct update (partial refresh)
      *             - EPD3IN7_DRIVER_MODE_A2: Fast but lower quality partial refresh
-     * @param wait If true, wait until the display is ready (not busy) before returning. `false` preferred
      * @return epd3in7_driver_status Operation status
      *
      * @note Important usage guidelines:
@@ -199,20 +215,7 @@ extern "C"
      *
      * - This function should not be called after Clear() without a full Display() in between.
      */
-    epd3in7_driver_status epd3in7_driver_display_1_gray_top(epd3in7_driver_handle *handle, const uint8_t *image, const uint16_t y_end_exclusive, const epd3in7_driver_mode mode, const bool wait);
-
-    /**
-     * @brief Enter sleep mode to conserve power and protect the display
-     *
-     * @param handle Pointer to the e-Paper display handle
-     * @return epd3in7_driver_status Operation status
-     *
-     * @note IMPORTANT: The display cannot be powered on for extended periods.
-     * When the display is not being refreshed, always put it into sleep mode or power it off.
-     * Otherwise, the display will remain in a high voltage state for a long time,
-     * which will permanently damage the e-Paper and cannot be repaired!
-     */
-    epd3in7_driver_status epd3in7_driver_sleep(epd3in7_driver_handle *handle);
+    epd3in7_driver_status epd3in7_driver_display_1_gray_top(epd3in7_driver_handle *handle, const uint8_t *image, const uint16_t y_end_exclusive, const epd3in7_driver_mode mode);
 
 #ifdef __cplusplus
 }
