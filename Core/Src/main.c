@@ -24,7 +24,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
-#include "epd_3in7.h"
+#include "epd3in7.h"
+#include "epdmgr.h"
 
 /* USER CODE END Includes */
 
@@ -200,7 +201,7 @@ int main(void)
                                           &hspi2);
 
   epd3in7_init_1_gray(&epd3in7);
-  epd3in7_clear_1_gray(&epd3in7, 1); // 1 = GC
+  epd3in7_clear_1_gray(&epd3in7, EPD_3IN7_MODE_GC);
 
   uint8_t black = 1;              // starting with black square
   uint8_t partial_since_full = 0; // count partial updates since last full refresh
@@ -208,8 +209,8 @@ int main(void)
 
   // One-time "top full" push so partials won't blank the rest
   draw_checker_full();
-  epd3in7_display_1_gray(&epd3in7, frame_bw, 1); // GC
-  epd3in7_display_1_gray(&epd3in7, frame_bw, 2); // DU
+  epd3in7_display_1_gray(&epd3in7, frame_bw, EPD_3IN7_MODE_GC); // GC
+  epd3in7_display_1_gray(&epd3in7, frame_bw, EPD_3IN7_MODE_DU); // DU
 
   while (1)
   {
@@ -220,7 +221,7 @@ int main(void)
     draw_filled_square_on_strip(strip_buf, black);
 
     // 3) Send the partial update (top stripe only)
-    epd3in7_display_1_gray_top(&epd3in7, strip_buf, STRIP_H);
+    epd3in7_display_1_gray_top(&epd3in7, strip_buf, STRIP_H, EPD_3IN7_LUT_1_GRAY_A2);
 
     // 4) Update shadow buffer so the next partial starts from the latest image
     strip_copy_to_shadow(frame_bw, strip_buf, STRIP_H);
@@ -234,7 +235,7 @@ int main(void)
     if (partial_since_full >= 5)
     {
       // Full-screen refresh with the current shadow buffer
-      epd3in7_display_1_gray(&epd3in7, frame_bw, 2); // DU
+      epd3in7_display_1_gray(&epd3in7, frame_bw, EPD_3IN7_MODE_GC);
       partial_since_full = 0;
     }
 

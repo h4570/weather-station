@@ -45,7 +45,8 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
-    Core/Src/epd_3in7.c
+    Core/Src/epd3in7.c
+    Core/Src/epdmgr.c
 )
 
 # Add include paths

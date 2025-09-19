@@ -29,7 +29,7 @@
 #
 ******************************************************************************/
 
-#include "epd_3in7.h"
+#include "epd3in7.h"
 
 typedef enum
 {
@@ -147,16 +147,21 @@ static void epd3in7_send_data(const epd3in7_handle *handle, const uint8_t data)
 static void epd3in7_busy_wait_for_low(const epd3in7_handle *handle)
 {
     uint8_t busy;
+    uint32_t start = HAL_GetTick();
 
     do
     {
         busy = HAL_GPIO_ReadPin(handle->pins.busy_port, handle->pins.busy_pin);
+        if ((HAL_GetTick() - start) > EPD_BUSY_TIMEOUT)
+        {
+            break; // Timeout reached, exit loop
+        }
     } while (busy);
 
     HAL_Delay(200);
 }
 
-static epd3in7_lut_type epd3in7_mode_to_lut(const epd3in7_mode mode, const uint8_t is_1_color)
+static epd3in7_lut_type epd3in7_mode_to_lut(const epd3in7_mode mode, const bool is_1_color)
 {
     if (is_1_color)
     {
@@ -181,18 +186,25 @@ static epd3in7_lut_type epd3in7_mode_to_lut(const epd3in7_mode mode, const uint8
     return EPD_3IN7_LUT_1_GRAY_GC;
 }
 
-epd3in7_handle epd3in7_create(const epd3in7_pins pins, const SPI_HandleTypeDef *spi_handle)
+epd3in7_handle epd3in7_create(const epd3in7_pins pins, SPI_HandleTypeDef *spi_handle)
 {
     epd3in7_handle handle;
     handle.width = EPD_3IN7_WIDTH;
     handle.height = EPD_3IN7_HEIGHT;
     handle.pins = pins;
     handle.spi_handle = spi_handle;
+    handle.was_lut_sent = false;
+    handle.last_lut = EPD_3IN7_LUT_4_GRAY_GC;
     return handle;
 }
 
-void epd3in7_load_lut(const epd3in7_handle *handle, const epd3in7_lut_type lut)
+void epd3in7_load_lut(epd3in7_handle *handle, const epd3in7_lut_type lut)
 {
+    if (handle->was_lut_sent && handle->last_lut == lut)
+    {
+        return;
+    }
+
     epd3in7_send_command(handle, EPD_CMD_WRITE_LUT_REGISTER);
 
     for (uint16_t i = 0; i < 105; i++)
@@ -214,9 +226,12 @@ void epd3in7_load_lut(const epd3in7_handle *handle, const epd3in7_lut_type lut)
             epd3in7_send_data(handle, epd3in7_lut_1_gray_a2[i]);
         }
     }
+
+    handle->was_lut_sent = true;
+    handle->last_lut = lut;
 }
 
-void epd3in7_init_4_gray(const epd3in7_handle *handle)
+void epd3in7_init_4_gray(epd3in7_handle *handle)
 {
     epd3in7_reset(handle);
 
@@ -230,7 +245,7 @@ void epd3in7_init_4_gray(const epd3in7_handle *handle)
     epd3in7_send_data(handle, 0xF7);
     epd3in7_busy_wait_for_low(handle);
 
-    epd3in7_send_command(handle, EPD_CMD_GATE_SETTING); // setting gaet number
+    epd3in7_send_command(handle, EPD_CMD_GATE_SETTING); // setting gate number
     epd3in7_send_data(handle, 0xDF);
     epd3in7_send_data(handle, 0x01);
     epd3in7_send_data(handle, 0x00);
@@ -288,9 +303,11 @@ void epd3in7_init_4_gray(const epd3in7_handle *handle)
 
     epd3in7_send_command(handle, EPD_CMD_DISPLAY_UPDATE_SEQUENCE_SETTING); // Display Update Control 2
     epd3in7_send_data(handle, 0xCF);
+
+    handle->was_lut_sent = true;
 }
 
-void epd3in7_init_1_gray(const epd3in7_handle *handle)
+void epd3in7_init_1_gray(epd3in7_handle *handle)
 {
     epd3in7_reset(handle);
 
@@ -363,9 +380,11 @@ void epd3in7_init_1_gray(const epd3in7_handle *handle)
 
     epd3in7_send_command(handle, EPD_CMD_DISPLAY_UPDATE_SEQUENCE_SETTING); // Display Update Control 2
     epd3in7_send_data(handle, 0xCF);
+
+    handle->was_lut_sent = true;
 }
 
-void epd3in7_clear_4_gray(const epd3in7_handle *handle)
+void epd3in7_clear_4_gray(epd3in7_handle *handle)
 {
     uint16_t width = (EPD_3IN7_WIDTH % 8 == 0) ? (EPD_3IN7_WIDTH / 8) : (EPD_3IN7_WIDTH / 8 + 1);
     uint16_t height = EPD_3IN7_HEIGHT;
@@ -418,7 +437,7 @@ void epd3in7_clear_4_gray(const epd3in7_handle *handle)
     epd3in7_busy_wait_for_low(handle);
 }
 
-void epd3in7_clear_1_gray(const epd3in7_handle *handle, const epd3in7_mode mode)
+void epd3in7_clear_1_gray(epd3in7_handle *handle, const epd3in7_mode mode)
 {
     const uint16_t image_counter = EPD_3IN7_WIDTH * EPD_3IN7_HEIGHT / 8;
 
@@ -436,15 +455,17 @@ void epd3in7_clear_1_gray(const epd3in7_handle *handle, const epd3in7_mode mode)
         epd3in7_send_data(handle, 0xff);
     }
 
-    epd3in7_lut_type lut_type = epd3in7_mode_to_lut(mode, 1);
+    epd3in7_lut_type lut_type = epd3in7_mode_to_lut(mode, true);
     epd3in7_load_lut(handle, lut_type);
 
     epd3in7_send_command(handle, EPD_CMD_DISPLAY_UPDATE_SEQUENCE);
     epd3in7_busy_wait_for_low(handle);
 }
 
-void epd3in7_display_4_gray(const epd3in7_handle *handle, const uint8_t *image)
+void epd3in7_display_4_gray(epd3in7_handle *handle, const uint8_t *image)
 {
+    const uint16_t image_counter = EPD_3IN7_WIDTH * EPD_3IN7_HEIGHT / 8;
+
     epd3in7_send_command(handle, 0x49);
     epd3in7_send_data(handle, 0x00);
 
@@ -458,7 +479,7 @@ void epd3in7_display_4_gray(const epd3in7_handle *handle, const uint8_t *image)
 
     epd3in7_send_command(handle, EPD_CMD_WRITE_RAM);
 
-    for (uint32_t i = 0; i < 16800; i++)
+    for (uint32_t i = 0; i < image_counter; i++)
     {
         uint8_t temp3 = 0;
 
@@ -511,7 +532,7 @@ void epd3in7_display_4_gray(const epd3in7_handle *handle, const uint8_t *image)
 
     epd3in7_send_command(handle, EPD_CMD_WRITE_RAM2);
 
-    for (uint32_t i = 0; i < 16800; i++)
+    for (uint32_t i = 0; i < image_counter; i++)
     {
         uint8_t temp3 = 0;
         for (uint32_t j = 0; j < 2; j++)
@@ -563,7 +584,7 @@ void epd3in7_display_4_gray(const epd3in7_handle *handle, const uint8_t *image)
     epd3in7_busy_wait_for_low(handle);
 }
 
-void epd3in7_display_1_gray(const epd3in7_handle *handle, const uint8_t *image, const epd3in7_mode mode)
+void epd3in7_display_1_gray(epd3in7_handle *handle, const uint8_t *image, const epd3in7_mode mode)
 {
     epd3in7_send_command(handle, EPD_CMD_SET_RAMX_START_END);
     epd3in7_send_data(handle, 0x00);
@@ -594,13 +615,13 @@ void epd3in7_display_1_gray(const epd3in7_handle *handle, const uint8_t *image, 
         epd3in7_send_data(handle, image[i]);
     }
 
-    epd3in7_lut_type lut_type = epd3in7_mode_to_lut(mode, 1);
+    epd3in7_lut_type lut_type = epd3in7_mode_to_lut(mode, true);
     epd3in7_load_lut(handle, lut_type);
     epd3in7_send_command(handle, EPD_CMD_DISPLAY_UPDATE_SEQUENCE);
     epd3in7_busy_wait_for_low(handle);
 }
 
-int epd3in7_display_1_gray_top(const epd3in7_handle *handle, const uint8_t *image, const uint16_t y_end_exclusive)
+int epd3in7_display_1_gray_top(epd3in7_handle *handle, const uint8_t *image, const uint16_t y_end_exclusive, const epd3in7_mode mode)
 {
     uint16_t x_start = 0;
     uint16_t y_start = 0;
@@ -649,7 +670,8 @@ int epd3in7_display_1_gray_top(const epd3in7_handle *handle, const uint8_t *imag
         epd3in7_send_data(handle, image[i]);
     }
 
-    epd3in7_load_lut(handle, EPD_3IN7_LUT_1_GRAY_A2);
+    epd3in7_lut_type lut_type = epd3in7_mode_to_lut(mode, true);
+    epd3in7_load_lut(handle, lut_type);
     epd3in7_send_command(handle, EPD_CMD_DISPLAY_UPDATE_SEQUENCE);
     epd3in7_busy_wait_for_low(handle);
 
