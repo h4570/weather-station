@@ -7,6 +7,9 @@
         "epd_3in7.h": "c",
         "stm32g4xx_hal_gpio.h": "c",
         "epd3in7.h": "c",
-        "stdio.h": "c"
+        "stdio.h": "c",
+        "epdmgr.h": "c",
+        "epd3in7_driver.h": "c",
+        "epd3in7_panel.h": "c"
     }
 }

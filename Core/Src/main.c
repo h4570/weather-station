@@ -24,8 +24,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
-#include "epd3in7.h"
-#include "epdmgr.h"
+#include "epd3in7_driver.h"
+#include "epd3in7_panel.h"
 
 /* USER CODE END Includes */
 
@@ -189,19 +189,21 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
-  epd3in7_handle epd3in7 = epd3in7_create((epd3in7_pins){
-                                              .reset_port = DISP_RST_GPIO_Port,
-                                              .reset_pin = DISP_RST_Pin,
-                                              .dc_port = DISP_DC_GPIO_Port,
-                                              .dc_pin = DISP_DC_Pin,
-                                              .busy_port = DISP_BUSY_GPIO_Port,
-                                              .busy_pin = DISP_BUSY_Pin,
-                                              .cs_port = DISP_CS_GPIO_Port,
-                                              .cs_pin = DISP_CS_Pin},
-                                          &hspi2, true);
+  epd3in7_driver_handle epd3in7_drv = epd3in7_driver_create((epd3in7_driver_pins){
+                                                                .reset_port = DISP_RST_GPIO_Port,
+                                                                .reset_pin = DISP_RST_Pin,
+                                                                .dc_port = DISP_DC_GPIO_Port,
+                                                                .dc_pin = DISP_DC_Pin,
+                                                                .busy_port = DISP_BUSY_GPIO_Port,
+                                                                .busy_pin = DISP_BUSY_Pin,
+                                                                .cs_port = DISP_CS_GPIO_Port,
+                                                                .cs_pin = DISP_CS_Pin},
+                                                            &hspi2, true);
 
-  epd3in7_init_1_gray(&epd3in7);
-  epd3in7_clear_1_gray(&epd3in7, EPD3IN7_MODE_GC);
+  epd3in7_panel_handle epd3in7_panel = epd3in7_panel_init(&epd3in7_drv);
+
+  epd3in7_driver_init_1_gray(&epd3in7_drv);
+  epd3in7_driver_clear_1_gray(&epd3in7_drv, EPD3IN7_DRIVER_MODE_GC);
 
   uint8_t black = 1;              // starting with black square
   uint8_t partial_since_full = 0; // count partial updates since last full refresh
@@ -209,8 +211,8 @@ int main(void)
 
   // One-time "top full" push so partials won't blank the rest
   draw_checker_full();
-  epd3in7_display_1_gray(&epd3in7, frame_bw, EPD3IN7_MODE_GC); // GC
-  epd3in7_display_1_gray(&epd3in7, frame_bw, EPD3IN7_MODE_DU); // DU
+  epd3in7_driver_display_1_gray(&epd3in7_drv, frame_bw, EPD3IN7_DRIVER_MODE_GC); // GC
+  epd3in7_driver_display_1_gray(&epd3in7_drv, frame_bw, EPD3IN7_DRIVER_MODE_DU); // DU
 
   while (1)
   {
@@ -221,7 +223,7 @@ int main(void)
     draw_filled_square_on_strip(strip_buf, black);
 
     // 3) Send the partial update (top stripe only)
-    epd3in7_display_1_gray_top(&epd3in7, strip_buf, STRIP_H, EPD3IN7_LUT_1_GRAY_A2);
+    epd3in7_driver_display_1_gray_top(&epd3in7_drv, strip_buf, STRIP_H, EPD3IN7_DRIVER_LUT_1_GRAY_A2);
 
     // 4) Update shadow buffer so the next partial starts from the latest image
     strip_copy_to_shadow(frame_bw, strip_buf, STRIP_H);
@@ -235,14 +237,14 @@ int main(void)
     if (partial_since_full >= 5)
     {
       // Full-screen refresh with the current shadow buffer
-      epd3in7_display_1_gray(&epd3in7, frame_bw, EPD3IN7_MODE_GC);
+      epd3in7_driver_display_1_gray(&epd3in7_drv, frame_bw, EPD3IN7_DRIVER_MODE_GC);
       partial_since_full = 0;
     }
 
     // 7) After 20 toggles, put the panel to sleep and stop using it
     if (toggles >= 20)
     {
-      epd3in7_sleep(&epd3in7);
+      epd3in7_driver_sleep(&epd3in7_drv);
       break; // exit the loop; do not touch the panel anymore
     }
 
