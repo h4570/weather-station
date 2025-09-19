@@ -30,6 +30,18 @@
 ******************************************************************************/
 
 #include "epd3in7.h"
+#include "string.h"
+
+#define EPD3IN7_TRY(expr)           \
+    do                              \
+    {                               \
+        epd3in7_status _s = (expr); \
+        if (_s != EPD3IN7_OK)       \
+        {                           \
+            err = _s;               \
+            goto fail;              \
+        }                           \
+    } while (0)
 
 typedef enum
 {
@@ -59,7 +71,8 @@ typedef enum
     EPD_CMD_AUTO_WRITE_BW_RAM_REG_PATTERN = 0x47,
     EPD_CMD_SET_RAMX_COUNTER = 0x4E,
     EPD_CMD_SET_RAMY_COUNTER = 0x4F,
-    EPD_CMD_SLEEP = 0x50
+    EPD_CMD_UNKNOWN_0x49 = 0x49,
+    EPD_CMD_SLEEP = 0x50 // Not sure about this one
 } epd3in7_cmd;
 
 static const uint8_t epd3in7_lut_4_gray_gc[] =
@@ -128,23 +141,43 @@ static void epd3in7_reset(const epd3in7_handle *handle)
     HAL_Delay(300);
 }
 
-static void epd3in7_send_command(const epd3in7_handle *handle, const epd3in7_cmd reg)
+static void epd3in7_send_begin(epd3in7_handle *handle)
+{
+    HAL_GPIO_WritePin(handle->pins.cs_port, handle->pins.cs_pin, GPIO_PIN_RESET);
+    handle->is_cs_low = true;
+}
+
+static void epd3in7_send_end(epd3in7_handle *handle)
+{
+    HAL_GPIO_WritePin(handle->pins.cs_port, handle->pins.cs_pin, GPIO_PIN_SET);
+    handle->is_cs_low = false;
+}
+
+static epd3in7_status epd3in7_send_command(const epd3in7_handle *handle, const epd3in7_cmd reg)
 {
     HAL_GPIO_WritePin(handle->pins.dc_port, handle->pins.dc_pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(handle->pins.cs_port, handle->pins.cs_pin, GPIO_PIN_RESET);
-    HAL_SPI_Transmit(handle->spi_handle, (uint8_t *)&reg, 1, EPD_SPI_TIMEOUT);
-    HAL_GPIO_WritePin(handle->pins.cs_port, handle->pins.cs_pin, GPIO_PIN_SET);
+    if (HAL_SPI_Transmit(handle->spi_handle, (uint8_t *)&reg, 1, EPD3IN7_SPI_TIMEOUT) != HAL_OK)
+        return EPD3IN7_ERR_HAL;
+    return EPD3IN7_OK;
 }
 
-static void epd3in7_send_data(const epd3in7_handle *handle, const uint8_t data)
+static epd3in7_status epd3in7_send_data(const epd3in7_handle *handle, const uint8_t data)
 {
     HAL_GPIO_WritePin(handle->pins.dc_port, handle->pins.dc_pin, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(handle->pins.cs_port, handle->pins.cs_pin, GPIO_PIN_RESET);
-    HAL_SPI_Transmit(handle->spi_handle, &data, 1, EPD_SPI_TIMEOUT);
-    HAL_GPIO_WritePin(handle->pins.cs_port, handle->pins.cs_pin, GPIO_PIN_SET);
+    if (HAL_SPI_Transmit(handle->spi_handle, &data, 1, EPD3IN7_SPI_TIMEOUT) != HAL_OK)
+        return EPD3IN7_ERR_HAL;
+    return EPD3IN7_OK;
 }
 
-static void epd3in7_busy_wait_for_low(const epd3in7_handle *handle)
+static epd3in7_status epd3in7_send_data_many(const epd3in7_handle *handle, const uint8_t *data, uint32_t len)
+{
+    HAL_GPIO_WritePin(handle->pins.dc_port, handle->pins.dc_pin, GPIO_PIN_SET);
+    if (HAL_SPI_Transmit(handle->spi_handle, (uint8_t *)data, len, EPD3IN7_SPI_TIMEOUT) != HAL_OK)
+        return EPD3IN7_ERR_HAL;
+    return EPD3IN7_OK;
+}
+
+static epd3in7_status epd3in7_busy_wait_for_idle(const epd3in7_handle *handle)
 {
     uint8_t busy;
     uint32_t start = HAL_GetTick();
@@ -152,345 +185,429 @@ static void epd3in7_busy_wait_for_low(const epd3in7_handle *handle)
     do
     {
         busy = HAL_GPIO_ReadPin(handle->pins.busy_port, handle->pins.busy_pin);
-        if ((HAL_GetTick() - start) > EPD_BUSY_TIMEOUT)
+        if (handle->busy_active_high)
         {
-            break; // Timeout reached, exit loop
+            if (busy == GPIO_PIN_RESET)
+                break;
         }
-    } while (busy);
+        else
+        {
+            if (busy == GPIO_PIN_SET)
+                break;
+        }
+        if ((HAL_GetTick() - start) > EPD3IN7_BUSY_TIMEOUT)
+        {
+            return EPD3IN7_ERR_TIMEOUT;
+        }
+    } while (handle->busy_active_high ? busy == GPIO_PIN_SET : busy == GPIO_PIN_RESET);
 
     HAL_Delay(200);
+    return EPD3IN7_OK;
 }
 
 static epd3in7_lut_type epd3in7_mode_to_lut(const epd3in7_mode mode, const bool is_1_color)
 {
     if (is_1_color)
     {
-        if (mode == EPD_3IN7_MODE_GC)
+        if (mode == EPD3IN7_MODE_GC)
         {
-            return EPD_3IN7_LUT_1_GRAY_GC;
+            return EPD3IN7_LUT_1_GRAY_GC;
         }
-        else if (mode == EPD_3IN7_MODE_DU)
+        else if (mode == EPD3IN7_MODE_DU)
         {
-            return EPD_3IN7_LUT_1_GRAY_DU;
+            return EPD3IN7_LUT_1_GRAY_DU;
         }
-        else if (mode == EPD_3IN7_MODE_A2)
+        else if (mode == EPD3IN7_MODE_A2)
         {
-            return EPD_3IN7_LUT_1_GRAY_A2;
+            return EPD3IN7_LUT_1_GRAY_A2;
         }
     }
     else
     {
-        return EPD_3IN7_LUT_4_GRAY_GC;
+        return EPD3IN7_LUT_4_GRAY_GC;
     }
 
-    return EPD_3IN7_LUT_1_GRAY_GC;
+    return EPD3IN7_LUT_1_GRAY_GC;
 }
 
-epd3in7_handle epd3in7_create(const epd3in7_pins pins, SPI_HandleTypeDef *spi_handle)
-{
-    epd3in7_handle handle;
-    handle.width = EPD_3IN7_WIDTH;
-    handle.height = EPD_3IN7_HEIGHT;
-    handle.pins = pins;
-    handle.spi_handle = spi_handle;
-    handle.was_lut_sent = false;
-    handle.last_lut = EPD_3IN7_LUT_4_GRAY_GC;
-    return handle;
-}
-
-void epd3in7_load_lut(epd3in7_handle *handle, const epd3in7_lut_type lut)
+/**
+ * REQUIRES: CS pin to be low
+ */
+static epd3in7_status epd3in7_load_lut(epd3in7_handle *handle, const epd3in7_lut_type lut)
 {
     if (handle->was_lut_sent && handle->last_lut == lut)
     {
-        return;
+        return EPD3IN7_OK;
     }
 
-    epd3in7_send_command(handle, EPD_CMD_WRITE_LUT_REGISTER);
-
-    for (uint16_t i = 0; i < 105; i++)
+    if (handle->is_cs_low == false)
     {
-        if (lut == EPD_3IN7_LUT_4_GRAY_GC)
+        return EPD3IN7_ERR_PARAM;
+    }
+
+    epd3in7_status err = EPD3IN7_OK;
+
+    epd3in7_status res = epd3in7_send_command(handle, EPD_CMD_WRITE_LUT_REGISTER);
+
+    if (res != EPD3IN7_OK)
+    {
+        return res;
+    }
+
+    const uint8_t *lut_ptr = NULL;
+
+    if (lut == EPD3IN7_LUT_4_GRAY_GC)
+    {
+        lut_ptr = epd3in7_lut_4_gray_gc;
+    }
+    else if (lut == EPD3IN7_LUT_1_GRAY_GC)
+    {
+        lut_ptr = epd3in7_lut_1_gray_gc;
+    }
+    else if (lut == EPD3IN7_LUT_1_GRAY_DU)
+    {
+        lut_ptr = epd3in7_lut_1_gray_du;
+    }
+    else if (lut == EPD3IN7_LUT_1_GRAY_A2)
+    {
+        lut_ptr = epd3in7_lut_1_gray_a2;
+    }
+
+    if (lut_ptr)
+    {
+        res = epd3in7_send_data_many(handle, lut_ptr, 105);
+
+        if (res != EPD3IN7_OK)
         {
-            epd3in7_send_data(handle, epd3in7_lut_4_gray_gc[i]);
-        }
-        else if (lut == EPD_3IN7_LUT_1_GRAY_GC)
-        {
-            epd3in7_send_data(handle, epd3in7_lut_1_gray_gc[i]);
-        }
-        else if (lut == EPD_3IN7_LUT_1_GRAY_DU)
-        {
-            epd3in7_send_data(handle, epd3in7_lut_1_gray_du[i]);
-        }
-        else if (lut == EPD_3IN7_LUT_1_GRAY_A2)
-        {
-            epd3in7_send_data(handle, epd3in7_lut_1_gray_a2[i]);
+            return res;
         }
     }
 
     handle->was_lut_sent = true;
     handle->last_lut = lut;
+
+    return err;
 }
 
-void epd3in7_init_4_gray(epd3in7_handle *handle)
+epd3in7_handle epd3in7_create(const epd3in7_pins pins, SPI_HandleTypeDef *spi_handle, const bool busy_active_high)
 {
+    epd3in7_handle handle;
+    handle.width = EPD3IN7_WIDTH;
+    handle.height = EPD3IN7_HEIGHT;
+    handle.pins = pins;
+    handle.spi_handle = spi_handle;
+    handle.was_lut_sent = false;
+    handle.last_lut = EPD3IN7_LUT_4_GRAY_GC;
+    handle.busy_active_high = busy_active_high;
+    return handle;
+}
+
+epd3in7_status epd3in7_init_4_gray(epd3in7_handle *handle)
+{
+    epd3in7_status err = EPD3IN7_OK;
+
     epd3in7_reset(handle);
 
-    epd3in7_send_command(handle, EPD_CMD_SW_RESET);
+    epd3in7_send_begin(handle);
+
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_SW_RESET));
+
     HAL_Delay(300);
 
-    epd3in7_send_command(handle, EPD_CMD_AUTO_WRITE_RED_RAM_REG_PATTERN);
-    epd3in7_send_data(handle, 0xF7);
-    epd3in7_busy_wait_for_low(handle);
-    epd3in7_send_command(handle, EPD_CMD_AUTO_WRITE_BW_RAM_REG_PATTERN);
-    epd3in7_send_data(handle, 0xF7);
-    epd3in7_busy_wait_for_low(handle);
+    if (epd3in7_send_command(handle, EPD_CMD_AUTO_WRITE_RED_RAM_REG_PATTERN) != EPD3IN7_OK)
+        goto fail;
+    if (epd3in7_send_data(handle, 0xF7) != EPD3IN7_OK)
+        goto fail;
+    if (epd3in7_busy_wait_for_idle(handle) != EPD3IN7_OK)
+        goto fail;
+    if (epd3in7_send_command(handle, EPD_CMD_AUTO_WRITE_BW_RAM_REG_PATTERN) != EPD3IN7_OK)
+        goto fail;
+    if (epd3in7_send_data(handle, 0xF7) != EPD3IN7_OK)
+        goto fail;
+    if (epd3in7_busy_wait_for_idle(handle) != EPD3IN7_OK)
+        goto fail;
 
-    epd3in7_send_command(handle, EPD_CMD_GATE_SETTING); // setting gate number
-    epd3in7_send_data(handle, 0xDF);
-    epd3in7_send_data(handle, 0x01);
-    epd3in7_send_data(handle, 0x00);
+    if (epd3in7_send_command(handle, EPD_CMD_GATE_SETTING) != EPD3IN7_OK)
+        goto fail;
+    uint8_t gate_setting[] = {0xDF, 0x01, 0x00};
+    if (epd3in7_send_data_many(handle, gate_setting, 3) != EPD3IN7_OK)
+        goto fail;
 
-    epd3in7_send_command(handle, EPD_CMD_GATE_VOLTAGE); // set gate voltage
-    epd3in7_send_data(handle, 0x00);
+    if (epd3in7_send_command(handle, EPD_CMD_GATE_VOLTAGE) != EPD3IN7_OK)
+        goto fail;
+    if (epd3in7_send_data(handle, 0x00) != EPD3IN7_OK)
+        goto fail;
 
-    epd3in7_send_command(handle, EPD_CMD_GATE_VOLTAGE_SOURCE); // set source voltage
-    epd3in7_send_data(handle, 0x41);
-    epd3in7_send_data(handle, 0xA8);
-    epd3in7_send_data(handle, 0x32);
+    if (epd3in7_send_command(handle, EPD_CMD_GATE_VOLTAGE_SOURCE) != EPD3IN7_OK)
+        goto fail;
+    uint8_t gate_voltage_source[] = {0x41, 0xA8, 0x32};
+    if (epd3in7_send_data_many(handle, gate_voltage_source, 3) != EPD3IN7_OK)
+        goto fail;
 
-    epd3in7_send_command(handle, EPD_CMD_DATA_ENTRY_SEQUENCE); // set data entry sequence
-    epd3in7_send_data(handle, 0x03);
+    if (epd3in7_send_command(handle, EPD_CMD_DATA_ENTRY_SEQUENCE) != EPD3IN7_OK)
+        goto fail;
+    if (epd3in7_send_data(handle, 0x03) != EPD3IN7_OK)
+        goto fail;
 
-    epd3in7_send_command(handle, EPD_CMD_BORDER_WAVEFORM_CONTROL); // set border
-    epd3in7_send_data(handle, 0x03);
+    if (epd3in7_send_command(handle, EPD_CMD_BORDER_WAVEFORM_CONTROL) != EPD3IN7_OK)
+        goto fail;
+    if (epd3in7_send_data(handle, 0x03) != EPD3IN7_OK)
+        goto fail;
 
-    epd3in7_send_command(handle, EPD_CMD_BOOSTER_SOFT_START_CONTROL); // set booster strength
-    epd3in7_send_data(handle, 0xAE);
-    epd3in7_send_data(handle, 0xC7);
-    epd3in7_send_data(handle, 0xC3);
-    epd3in7_send_data(handle, 0xC0);
-    epd3in7_send_data(handle, 0xC0);
+    if (epd3in7_send_command(handle, EPD_CMD_BOOSTER_SOFT_START_CONTROL) != EPD3IN7_OK)
+        goto fail;
+    uint8_t booster[] = {0xAE, 0xC7, 0xC3, 0xC0, 0xC0};
+    if (epd3in7_send_data_many(handle, booster, 5) != EPD3IN7_OK)
+        goto fail;
 
-    epd3in7_send_command(handle, EPD_CMD_TEMPERATURE_SENSOR_SELECTION); // set internal sensor on
-    epd3in7_send_data(handle, 0x80);
+    if (epd3in7_send_command(handle, EPD_CMD_TEMPERATURE_SENSOR_SELECTION) != EPD3IN7_OK)
+        goto fail;
+    if (epd3in7_send_data(handle, 0x80) != EPD3IN7_OK)
+        goto fail;
 
-    epd3in7_send_command(handle, EPD_CMD_WRITE_VCOM_REGISTER); // set vcom value
-    epd3in7_send_data(handle, 0x44);
+    if (epd3in7_send_command(handle, EPD_CMD_WRITE_VCOM_REGISTER) != EPD3IN7_OK)
+        goto fail;
+    if (epd3in7_send_data(handle, 0x44) != EPD3IN7_OK)
+        goto fail;
 
-    epd3in7_send_command(handle, EPD_CMD_DISPLAY_OPTION); // set display option, these setting turn on previous function
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x00);
+    if (epd3in7_send_command(handle, EPD_CMD_DISPLAY_OPTION) != EPD3IN7_OK)
+        goto fail;
+    uint8_t display_option[10] = {0};
+    if (epd3in7_send_data_many(handle, display_option, 10) != EPD3IN7_OK)
+        goto fail;
 
-    epd3in7_send_command(handle, EPD_CMD_SET_RAMX_START_END); // setting X direction start/end position of RAM
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x17);
-    epd3in7_send_data(handle, 0x01);
+    if (epd3in7_send_command(handle, EPD_CMD_SET_RAMX_START_END) != EPD3IN7_OK)
+        goto fail;
+    uint8_t ramx[] = {0x00, 0x00, 0x17, 0x01};
+    if (epd3in7_send_data_many(handle, ramx, 4) != EPD3IN7_OK)
+        goto fail;
 
-    epd3in7_send_command(handle, EPD_CMD_SET_RAMY_START_END); // setting Y direction start/end position of RAM
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0xDF);
-    epd3in7_send_data(handle, 0x01);
+    if (epd3in7_send_command(handle, EPD_CMD_SET_RAMY_START_END) != EPD3IN7_OK)
+        goto fail;
+    uint8_t ramy[] = {0x00, 0x00, 0xDF, 0x01};
+    if (epd3in7_send_data_many(handle, ramy, 4) != EPD3IN7_OK)
+        goto fail;
 
-    epd3in7_send_command(handle, EPD_CMD_DISPLAY_UPDATE_SEQUENCE_SETTING); // Display Update Control 2
-    epd3in7_send_data(handle, 0xCF);
+    if (epd3in7_send_command(handle, EPD_CMD_DISPLAY_UPDATE_SEQUENCE_SETTING) != EPD3IN7_OK)
+        goto fail;
+    if (epd3in7_send_data(handle, 0xCF) != EPD3IN7_OK)
+        goto fail;
 
-    handle->was_lut_sent = true;
+    epd3in7_send_end(handle);
+
+    handle->was_lut_sent = false;
+    return EPD3IN7_OK;
+fail:
+    epd3in7_send_end(handle);
+    return err;
 }
 
-void epd3in7_init_1_gray(epd3in7_handle *handle)
+epd3in7_status epd3in7_init_1_gray(epd3in7_handle *handle)
 {
+    epd3in7_status err = EPD3IN7_OK;
+
     epd3in7_reset(handle);
 
-    epd3in7_send_command(handle, EPD_CMD_SW_RESET);
+    epd3in7_send_begin(handle);
+
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_SW_RESET));
     HAL_Delay(300);
 
-    epd3in7_send_command(handle, EPD_CMD_AUTO_WRITE_RED_RAM_REG_PATTERN);
-    epd3in7_send_data(handle, 0xF7);
-    epd3in7_busy_wait_for_low(handle);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_AUTO_WRITE_RED_RAM_REG_PATTERN));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0xF7));
+    EPD3IN7_TRY(epd3in7_busy_wait_for_idle(handle));
 
-    epd3in7_send_command(handle, EPD_CMD_AUTO_WRITE_BW_RAM_REG_PATTERN);
-    epd3in7_send_data(handle, 0xF7);
-    epd3in7_busy_wait_for_low(handle);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_AUTO_WRITE_BW_RAM_REG_PATTERN));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0xF7));
+    EPD3IN7_TRY(epd3in7_busy_wait_for_idle(handle));
 
-    epd3in7_send_command(handle, EPD_CMD_GATE_SETTING); // setting gaet number
-    epd3in7_send_data(handle, 0xDF);
-    epd3in7_send_data(handle, 0x01);
-    epd3in7_send_data(handle, 0x00);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_GATE_SETTING));
+    uint8_t gate_setting[] = {0xDF, 0x01, 0x00};
+    EPD3IN7_TRY(epd3in7_send_data_many(handle, gate_setting, 3));
 
-    epd3in7_send_command(handle, EPD_CMD_GATE_VOLTAGE); // set gate voltage
-    epd3in7_send_data(handle, 0x00);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_GATE_VOLTAGE));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x00));
 
-    epd3in7_send_command(handle, EPD_CMD_GATE_VOLTAGE_SOURCE); // set source voltage
-    epd3in7_send_data(handle, 0x41);
-    epd3in7_send_data(handle, 0xA8);
-    epd3in7_send_data(handle, 0x32);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_GATE_VOLTAGE_SOURCE));
+    uint8_t gate_voltage_source[] = {0x41, 0xA8, 0x32};
+    EPD3IN7_TRY(epd3in7_send_data_many(handle, gate_voltage_source, 3));
 
-    epd3in7_send_command(handle, EPD_CMD_DATA_ENTRY_SEQUENCE); // set data entry sequence
-    epd3in7_send_data(handle, 0x03);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_DATA_ENTRY_SEQUENCE));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x03));
 
-    epd3in7_send_command(handle, EPD_CMD_BORDER_WAVEFORM_CONTROL); // set border
-    epd3in7_send_data(handle, 0x03);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_BORDER_WAVEFORM_CONTROL));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x03));
 
-    epd3in7_send_command(handle, EPD_CMD_BOOSTER_SOFT_START_CONTROL); // set booster strength
-    epd3in7_send_data(handle, 0xAE);
-    epd3in7_send_data(handle, 0xC7);
-    epd3in7_send_data(handle, 0xC3);
-    epd3in7_send_data(handle, 0xC0);
-    epd3in7_send_data(handle, 0xC0);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_BOOSTER_SOFT_START_CONTROL));
+    uint8_t booster[] = {0xAE, 0xC7, 0xC3, 0xC0, 0xC0};
+    EPD3IN7_TRY(epd3in7_send_data_many(handle, booster, 5));
 
-    epd3in7_send_command(handle, EPD_CMD_TEMPERATURE_SENSOR_SELECTION); // set internal sensor on
-    epd3in7_send_data(handle, 0x80);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_TEMPERATURE_SENSOR_SELECTION));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x80));
 
-    epd3in7_send_command(handle, EPD_CMD_WRITE_VCOM_REGISTER); // set vcom value
-    epd3in7_send_data(handle, 0x44);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_WRITE_VCOM_REGISTER));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x44));
 
-    epd3in7_send_command(handle, EPD_CMD_DISPLAY_OPTION); // set display option, these setting turn on previous function
-    epd3in7_send_data(handle, 0x00);                      // can switch 1 gray or 4 gray
-    epd3in7_send_data(handle, 0xFF);
-    epd3in7_send_data(handle, 0xFF);
-    epd3in7_send_data(handle, 0xFF);
-    epd3in7_send_data(handle, 0xFF);
-    epd3in7_send_data(handle, 0x4F);
-    epd3in7_send_data(handle, 0xFF);
-    epd3in7_send_data(handle, 0xFF);
-    epd3in7_send_data(handle, 0xFF);
-    epd3in7_send_data(handle, 0xFF);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_DISPLAY_OPTION));
+    uint8_t display_option[] = {0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x4F, 0xFF, 0xFF, 0xFF, 0xFF};
+    EPD3IN7_TRY(epd3in7_send_data_many(handle, display_option, 10));
 
-    epd3in7_send_command(handle, EPD_CMD_SET_RAMX_START_END); // setting X direction start/end position of RAM
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x17);
-    epd3in7_send_data(handle, 0x01);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_SET_RAMX_START_END));
+    uint8_t ramx[] = {0x00, 0x00, 0x17, 0x01};
+    EPD3IN7_TRY(epd3in7_send_data_many(handle, ramx, 4));
 
-    epd3in7_send_command(handle, EPD_CMD_SET_RAMY_START_END); // setting Y direction start/end position of RAM
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0xDF);
-    epd3in7_send_data(handle, 0x01);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_SET_RAMY_START_END));
+    uint8_t ramy[] = {0x00, 0x00, 0xDF, 0x01};
+    EPD3IN7_TRY(epd3in7_send_data_many(handle, ramy, 4));
 
-    epd3in7_send_command(handle, EPD_CMD_DISPLAY_UPDATE_SEQUENCE_SETTING); // Display Update Control 2
-    epd3in7_send_data(handle, 0xCF);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_DISPLAY_UPDATE_SEQUENCE_SETTING));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0xCF));
 
-    handle->was_lut_sent = true;
+    epd3in7_send_end(handle);
+
+    handle->was_lut_sent = false;
+    return EPD3IN7_OK;
+fail:
+    epd3in7_send_end(handle);
+    return err;
 }
 
-void epd3in7_clear_4_gray(epd3in7_handle *handle)
+epd3in7_status epd3in7_clear_4_gray(epd3in7_handle *handle)
 {
-    uint16_t width = (EPD_3IN7_WIDTH % 8 == 0) ? (EPD_3IN7_WIDTH / 8) : (EPD_3IN7_WIDTH / 8 + 1);
-    uint16_t height = EPD_3IN7_HEIGHT;
+    epd3in7_status err = EPD3IN7_OK;
+    uint16_t width = (EPD3IN7_WIDTH % 8 == 0) ? (EPD3IN7_WIDTH / 8) : (EPD3IN7_WIDTH / 8 + 1);
+    uint16_t height = EPD3IN7_HEIGHT;
 
-    epd3in7_send_command(handle, 0x49);
-    epd3in7_send_data(handle, 0x00);
+    epd3in7_send_begin(handle);
 
-    epd3in7_send_command(handle, EPD_CMD_SET_RAMX_COUNTER);
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x00);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_UNKNOWN_0x49));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x00));
 
-    epd3in7_send_command(handle, EPD_CMD_SET_RAMY_COUNTER);
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x00);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_SET_RAMX_COUNTER));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x00));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x00));
 
-    epd3in7_send_command(handle, EPD_CMD_WRITE_RAM);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_SET_RAMY_COUNTER));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x00));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x00));
 
-    for (uint16_t j = 0; j < height; j++)
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_WRITE_RAM));
+
+    uint32_t total = width * height;
+    uint8_t ff_buf[32];
+    memset(ff_buf, 0xFF, sizeof(ff_buf));
+    uint32_t left = total;
+    while (left > 0)
     {
-        for (uint16_t i = 0; i < width; i++)
-        {
-            epd3in7_send_data(handle, 0xff);
-        }
+        uint32_t chunk = left > sizeof(ff_buf) ? sizeof(ff_buf) : left;
+        EPD3IN7_TRY(epd3in7_send_data_many(handle, ff_buf, chunk));
+        left -= chunk;
     }
 
-    epd3in7_send_command(handle, EPD_CMD_SET_RAMX_COUNTER);
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x00);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_SET_RAMX_COUNTER));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x00));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x00));
 
-    epd3in7_send_command(handle, EPD_CMD_SET_RAMY_COUNTER);
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x00);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_SET_RAMY_COUNTER));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x00));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x00));
 
-    epd3in7_send_command(handle, EPD_CMD_WRITE_RAM2);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_WRITE_RAM2));
 
-    for (uint16_t j = 0; j < height; j++)
+    left = total;
+    while (left > 0)
     {
-        for (uint16_t i = 0; i < width; i++)
-        {
-            epd3in7_send_data(handle, 0xff);
-        }
+        uint32_t chunk = left > sizeof(ff_buf) ? sizeof(ff_buf) : left;
+        EPD3IN7_TRY(epd3in7_send_data_many(handle, ff_buf, chunk));
+        left -= chunk;
     }
 
-    epd3in7_load_lut(handle, EPD_3IN7_LUT_4_GRAY_GC);
+    EPD3IN7_TRY(epd3in7_load_lut(handle, EPD3IN7_LUT_4_GRAY_GC));
 
-    epd3in7_send_command(handle, EPD_CMD_DISPLAY_UPDATE_SEQUENCE_SETTING);
-    epd3in7_send_data(handle, 0xC7);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_DISPLAY_UPDATE_SEQUENCE_SETTING));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0xC7));
 
-    epd3in7_send_command(handle, EPD_CMD_DISPLAY_UPDATE_SEQUENCE);
-    epd3in7_busy_wait_for_low(handle);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_DISPLAY_UPDATE_SEQUENCE));
+    epd3in7_send_end(handle);
+
+    EPD3IN7_TRY(epd3in7_busy_wait_for_idle(handle));
+    return EPD3IN7_OK;
+
+fail:
+    epd3in7_send_end(handle);
+    return err;
 }
 
-void epd3in7_clear_1_gray(epd3in7_handle *handle, const epd3in7_mode mode)
+epd3in7_status epd3in7_clear_1_gray(epd3in7_handle *handle, const epd3in7_mode mode)
 {
-    const uint16_t image_counter = EPD_3IN7_WIDTH * EPD_3IN7_HEIGHT / 8;
+    epd3in7_status err = EPD3IN7_OK;
+    const uint16_t image_counter = EPD3IN7_WIDTH * EPD3IN7_HEIGHT / 8;
 
-    epd3in7_send_command(handle, EPD_CMD_SET_RAMX_COUNTER);
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_command(handle, EPD_CMD_SET_RAMY_COUNTER);
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x00);
+    epd3in7_send_begin(handle);
 
-    epd3in7_send_command(handle, EPD_CMD_WRITE_RAM);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_SET_RAMX_COUNTER));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x00));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x00));
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_SET_RAMY_COUNTER));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x00));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x00));
 
-    for (uint16_t i = 0; i < image_counter; i++)
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_WRITE_RAM));
+
+    uint8_t ff_buf[32];
+    memset(ff_buf, 0xFF, sizeof(ff_buf));
+    uint32_t left = image_counter;
+    while (left > 0)
     {
-        epd3in7_send_data(handle, 0xff);
+        uint32_t chunk = left > sizeof(ff_buf) ? sizeof(ff_buf) : left;
+        EPD3IN7_TRY(epd3in7_send_data_many(handle, ff_buf, chunk));
+        left -= chunk;
     }
 
     epd3in7_lut_type lut_type = epd3in7_mode_to_lut(mode, true);
-    epd3in7_load_lut(handle, lut_type);
+    EPD3IN7_TRY(epd3in7_load_lut(handle, lut_type));
 
-    epd3in7_send_command(handle, EPD_CMD_DISPLAY_UPDATE_SEQUENCE);
-    epd3in7_busy_wait_for_low(handle);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_DISPLAY_UPDATE_SEQUENCE));
+    epd3in7_send_end(handle);
+
+    EPD3IN7_TRY(epd3in7_busy_wait_for_idle(handle));
+    return EPD3IN7_OK;
+
+fail:
+    epd3in7_send_end(handle);
+    return err;
 }
 
-void epd3in7_display_4_gray(epd3in7_handle *handle, const uint8_t *image)
+epd3in7_status epd3in7_display_4_gray(epd3in7_handle *handle, const uint8_t *image)
 {
-    const uint16_t image_counter = EPD_3IN7_WIDTH * EPD_3IN7_HEIGHT / 8;
+    epd3in7_status err = EPD3IN7_OK;
+    const uint16_t image_counter = EPD3IN7_WIDTH * EPD3IN7_HEIGHT / 8;
 
-    epd3in7_send_command(handle, 0x49);
-    epd3in7_send_data(handle, 0x00);
+    epd3in7_send_begin(handle);
 
-    epd3in7_send_command(handle, EPD_CMD_SET_RAMX_COUNTER);
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x00);
+    EPD3IN7_TRY(epd3in7_send_command(handle, 0x49));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x00));
 
-    epd3in7_send_command(handle, EPD_CMD_SET_RAMY_COUNTER);
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x00);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_SET_RAMX_COUNTER));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x00));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x00));
 
-    epd3in7_send_command(handle, EPD_CMD_WRITE_RAM);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_SET_RAMY_COUNTER));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x00));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x00));
 
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_WRITE_RAM));
+
+    // pętla z konwersją, nie można użyć send_data_many
     for (uint32_t i = 0; i < image_counter; i++)
     {
         uint8_t temp3 = 0;
-
         for (uint32_t j = 0; j < 2; j++)
         {
             uint8_t temp1 = image[i * 2 + j];
-
             for (uint32_t k = 0; k < 2; k++)
             {
                 uint8_t temp2 = temp1 & 0xC0;
-
                 if (temp2 == 0xC0)
                     temp3 |= 0x01; // white
                 else if (temp2 == 0x00)
@@ -500,7 +617,6 @@ void epd3in7_display_4_gray(epd3in7_handle *handle, const uint8_t *image)
                 else               // 0x40
                     temp3 |= 0x01; // gray2
                 temp3 <<= 1;
-
                 temp1 <<= 2;
                 temp2 = temp1 & 0xC0;
                 if (temp2 == 0xC0) // white
@@ -513,24 +629,22 @@ void epd3in7_display_4_gray(epd3in7_handle *handle, const uint8_t *image)
                     temp3 |= 0x01; // gray2
                 if (j != 1 || k != 1)
                     temp3 <<= 1;
-
                 temp1 <<= 2;
             }
         }
-
-        epd3in7_send_data(handle, temp3);
+        EPD3IN7_TRY(epd3in7_send_data(handle, temp3));
     }
 
     // new  data
-    epd3in7_send_command(handle, EPD_CMD_SET_RAMX_COUNTER);
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x00);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_SET_RAMX_COUNTER));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x00));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x00));
 
-    epd3in7_send_command(handle, EPD_CMD_SET_RAMY_COUNTER);
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x00);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_SET_RAMY_COUNTER));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x00));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x00));
 
-    epd3in7_send_command(handle, EPD_CMD_WRITE_RAM2);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_WRITE_RAM2));
 
     for (uint32_t i = 0; i < image_counter; i++)
     {
@@ -538,11 +652,9 @@ void epd3in7_display_4_gray(epd3in7_handle *handle, const uint8_t *image)
         for (uint32_t j = 0; j < 2; j++)
         {
             uint8_t temp1 = image[i * 2 + j];
-
             for (uint32_t k = 0; k < 2; k++)
             {
                 uint8_t temp2 = temp1 & 0xC0;
-
                 if (temp2 == 0xC0)
                     temp3 |= 0x01; // white
                 else if (temp2 == 0x00)
@@ -552,10 +664,8 @@ void epd3in7_display_4_gray(epd3in7_handle *handle, const uint8_t *image)
                 else               // 0x40
                     temp3 |= 0x00; // gray2
                 temp3 <<= 1;
-
                 temp1 <<= 2;
                 temp2 = temp1 & 0xC0;
-
                 if (temp2 == 0xC0) // white
                     temp3 |= 0x01;
                 else if (temp2 == 0x00) // black
@@ -566,74 +676,78 @@ void epd3in7_display_4_gray(epd3in7_handle *handle, const uint8_t *image)
                     temp3 |= 0x00; // gray2
                 if (j != 1 || k != 1)
                     temp3 <<= 1;
-
                 temp1 <<= 2;
             }
         }
-
-        epd3in7_send_data(handle, temp3);
+        EPD3IN7_TRY(epd3in7_send_data(handle, temp3));
     }
 
-    epd3in7_load_lut(handle, EPD_3IN7_LUT_4_GRAY_GC);
+    EPD3IN7_TRY(epd3in7_load_lut(handle, EPD3IN7_LUT_4_GRAY_GC));
 
-    epd3in7_send_command(handle, EPD_CMD_DISPLAY_UPDATE_SEQUENCE_SETTING);
-    epd3in7_send_data(handle, 0xC7);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_DISPLAY_UPDATE_SEQUENCE_SETTING));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0xC7));
 
-    epd3in7_send_command(handle, EPD_CMD_DISPLAY_UPDATE_SEQUENCE);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_DISPLAY_UPDATE_SEQUENCE));
+    epd3in7_send_end(handle);
 
-    epd3in7_busy_wait_for_low(handle);
+    EPD3IN7_TRY(epd3in7_busy_wait_for_idle(handle));
+    return EPD3IN7_OK;
+fail:
+    epd3in7_send_end(handle);
+    return err;
 }
 
-void epd3in7_display_1_gray(epd3in7_handle *handle, const uint8_t *image, const epd3in7_mode mode)
+epd3in7_status epd3in7_display_1_gray(epd3in7_handle *handle, const uint8_t *image, const epd3in7_mode mode)
 {
-    epd3in7_send_command(handle, EPD_CMD_SET_RAMX_START_END);
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x17);
-    epd3in7_send_data(handle, 0x01);
+    epd3in7_status err = EPD3IN7_OK;
+    epd3in7_send_begin(handle);
 
-    epd3in7_send_command(handle, EPD_CMD_SET_RAMY_START_END);
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0xDF);
-    epd3in7_send_data(handle, 0x01);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_SET_RAMX_START_END));
+    uint8_t ramx[] = {0x00, 0x00, 0x17, 0x01};
+    EPD3IN7_TRY(epd3in7_send_data_many(handle, ramx, 4));
 
-    epd3in7_send_command(handle, EPD_CMD_SET_RAMX_COUNTER);
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x00);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_SET_RAMY_START_END));
+    uint8_t ramy[] = {0x00, 0x00, 0xDF, 0x01};
+    EPD3IN7_TRY(epd3in7_send_data_many(handle, ramy, 4));
 
-    epd3in7_send_command(handle, EPD_CMD_SET_RAMY_COUNTER);
-    epd3in7_send_data(handle, 0x00);
-    epd3in7_send_data(handle, 0x00);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_SET_RAMX_COUNTER));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x00));
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_SET_RAMY_COUNTER));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x00));
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x00));
 
-    const uint16_t image_counter = EPD_3IN7_WIDTH * EPD_3IN7_HEIGHT / 8;
+    const uint16_t image_counter = EPD3IN7_WIDTH * EPD3IN7_HEIGHT / 8;
 
-    epd3in7_send_command(handle, EPD_CMD_WRITE_RAM);
-
-    for (uint16_t i = 0; i < image_counter; i++)
-    {
-        epd3in7_send_data(handle, image[i]);
-    }
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_WRITE_RAM));
+    EPD3IN7_TRY(epd3in7_send_data_many(handle, image, image_counter));
 
     epd3in7_lut_type lut_type = epd3in7_mode_to_lut(mode, true);
-    epd3in7_load_lut(handle, lut_type);
-    epd3in7_send_command(handle, EPD_CMD_DISPLAY_UPDATE_SEQUENCE);
-    epd3in7_busy_wait_for_low(handle);
+    EPD3IN7_TRY(epd3in7_load_lut(handle, lut_type));
+
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_DISPLAY_UPDATE_SEQUENCE));
+    epd3in7_send_end(handle);
+
+    EPD3IN7_TRY(epd3in7_busy_wait_for_idle(handle));
+    return EPD3IN7_OK;
+fail:
+    epd3in7_send_end(handle);
+    return err;
 }
 
-int epd3in7_display_1_gray_top(epd3in7_handle *handle, const uint8_t *image, const uint16_t y_end_exclusive, const epd3in7_mode mode)
+epd3in7_status epd3in7_display_1_gray_top(epd3in7_handle *handle, const uint8_t *image, const uint16_t y_end_exclusive, const epd3in7_mode mode)
 {
+    epd3in7_status err = EPD3IN7_OK;
     uint16_t x_start = 0;
     uint16_t y_start = 0;
-    uint16_t x_end = EPD_3IN7_WIDTH;
+    uint16_t x_end = EPD3IN7_WIDTH;
 
     if (image == NULL)
     {
-        return -1; // null pointer
+        return EPD3IN7_ERR_PARAM; // null pointer
     }
-    else if (y_end_exclusive == 0 || y_end_exclusive > EPD_3IN7_HEIGHT)
+    else if (y_end_exclusive == 0 || y_end_exclusive > EPD3IN7_HEIGHT)
     {
-        return -2; // invalid height
+        return EPD3IN7_ERR_PARAM; // invalid height
     }
 
     uint16_t y_end_exclusive_temp = y_end_exclusive;
@@ -641,45 +755,65 @@ int epd3in7_display_1_gray_top(epd3in7_handle *handle, const uint8_t *image, con
     x_end -= 1;
     y_end_exclusive_temp -= 1;
 
-    epd3in7_send_command(handle, EPD_CMD_SET_RAMX_START_END);
-    epd3in7_send_data(handle, x_start & 0xff);
-    epd3in7_send_data(handle, (x_start >> 8) & 0x03);
-    epd3in7_send_data(handle, x_end & 0xff);
-    epd3in7_send_data(handle, (x_end >> 8) & 0x03);
+    epd3in7_send_begin(handle);
 
-    epd3in7_send_command(handle, EPD_CMD_SET_RAMY_START_END);
-    epd3in7_send_data(handle, y_start & 0xff);
-    epd3in7_send_data(handle, (y_start >> 8) & 0x03);
-    epd3in7_send_data(handle, y_end_exclusive_temp & 0xff);
-    epd3in7_send_data(handle, (y_end_exclusive_temp >> 8) & 0x03);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_SET_RAMX_START_END));
+    uint8_t ramx[4] = {
+        x_start & 0xff,
+        (x_start >> 8) & 0x03,
+        x_end & 0xff,
+        (x_end >> 8) & 0x03};
+    EPD3IN7_TRY(epd3in7_send_data_many(handle, ramx, 4));
 
-    epd3in7_send_command(handle, EPD_CMD_SET_RAMX_COUNTER); // SET_RAM_X_ADDRESS_COUNTER
-    epd3in7_send_data(handle, x_start & 0xFF);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_SET_RAMY_START_END));
+    uint8_t ramy[4] = {
+        y_start & 0xff,
+        (y_start >> 8) & 0x03,
+        y_end_exclusive_temp & 0xff,
+        (y_end_exclusive_temp >> 8) & 0x03};
+    EPD3IN7_TRY(epd3in7_send_data_many(handle, ramy, 4));
 
-    epd3in7_send_command(handle, EPD_CMD_SET_RAMY_COUNTER); // SET_RAM_Y_ADDRESS_COUNTER
-    epd3in7_send_data(handle, y_start & 0xFF);
-    epd3in7_send_data(handle, (y_start >> 8) & 0xFF);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_SET_RAMX_COUNTER)); // SET_RAM_X_ADDRESS_COUNTER
+    EPD3IN7_TRY(epd3in7_send_data(handle, x_start & 0xFF));
+
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_SET_RAMY_COUNTER)); // SET_RAM_Y_ADDRESS_COUNTER
+    EPD3IN7_TRY(epd3in7_send_data(handle, y_start & 0xFF));
+    EPD3IN7_TRY(epd3in7_send_data(handle, (y_start >> 8) & 0xFF));
 
     uint16_t width = (x_end - x_start) % 8 == 0 ? (x_end - x_start) / 8 : (x_end - x_start) / 8 + 1;
     uint16_t image_counter = width * (y_end_exclusive - y_start);
 
-    epd3in7_send_command(handle, EPD_CMD_WRITE_RAM);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_WRITE_RAM));
 
-    for (uint16_t i = 0; i < image_counter; i++)
-    {
-        epd3in7_send_data(handle, image[i]);
-    }
+    EPD3IN7_TRY(epd3in7_send_data_many(handle, image, image_counter));
 
     epd3in7_lut_type lut_type = epd3in7_mode_to_lut(mode, true);
-    epd3in7_load_lut(handle, lut_type);
-    epd3in7_send_command(handle, EPD_CMD_DISPLAY_UPDATE_SEQUENCE);
-    epd3in7_busy_wait_for_low(handle);
+    EPD3IN7_TRY(epd3in7_load_lut(handle, lut_type));
+
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_DISPLAY_UPDATE_SEQUENCE));
+    epd3in7_send_end(handle);
+
+    EPD3IN7_TRY(epd3in7_busy_wait_for_idle(handle));
 
     return 0;
+
+fail:
+    epd3in7_send_end(handle);
+    return err;
 }
 
-void epd3in7_sleep(const epd3in7_handle *handle)
+epd3in7_status epd3in7_sleep(const epd3in7_handle *handle)
 {
-    epd3in7_send_command(handle, EPD_CMD_DEEP_SLEEP); // deep sleep
-    epd3in7_send_data(handle, 0x03);
+    epd3in7_status err = EPD3IN7_OK;
+
+    epd3in7_send_begin(handle);
+    EPD3IN7_TRY(epd3in7_send_command(handle, EPD_CMD_DEEP_SLEEP)); // deep sleep
+    EPD3IN7_TRY(epd3in7_send_data(handle, 0x03));
+    epd3in7_send_end(handle);
+
+    return EPD3IN7_OK;
+
+fail:
+    epd3in7_send_end(handle);
+    return err;
 }

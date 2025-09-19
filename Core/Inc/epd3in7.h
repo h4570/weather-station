@@ -1,33 +1,11 @@
 /*****************************************************************************
-* | File      	:   epd_3in7.h
-* | Author      :   Waveshare team, Sandro
-* | Function    :   3.7inch e-paper
-* | Info        :
-*----------------
-* |	This version:   V1.1
-* | Date        :   2025-09-15
-* | Info        :
-* -----------------------------------------------------------------------------
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documnetation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to  whom the Software is
-# furished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS OR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-# THE SOFTWARE.
-#
-******************************************************************************/
+ * | File          :   epd3in7.h
+ * | Author        :   Waveshare team, Sandro
+ * | Function      :   3.7inch e-paper driver (Waveshare 20123)
+ *----------------
+ * | Version       :   V1.0
+ * | Date          :   2025-09-15
+ ******************************************************************************/
 #pragma once
 
 #include "stm32g4xx_hal.h"
@@ -36,115 +14,200 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-#define EPD_3IN7_WIDTH 280
-#define EPD_3IN7_HEIGHT 480
-#define EPD_SPI_TIMEOUT 1000
-#define EPD_BUSY_TIMEOUT 5000
-
-typedef enum
+#ifdef __cplusplus
+extern "C"
 {
-    EPD_3IN7_MODE_GC = 1,
-    EPD_3IN7_MODE_DU = 2,
-    EPD_3IN7_MODE_A2 = 3
-} epd3in7_mode;
-
-typedef enum
-{
-    EPD_3IN7_LUT_4_GRAY_GC = 0,
-    EPD_3IN7_LUT_1_GRAY_GC = 1,
-    EPD_3IN7_LUT_1_GRAY_DU = 2,
-    EPD_3IN7_LUT_1_GRAY_A2 = 3
-} epd3in7_lut_type;
-
-typedef struct
-{
-    GPIO_TypeDef *reset_port;
-    uint16_t reset_pin;
-
-    GPIO_TypeDef *dc_port;
-    uint16_t dc_pin;
-
-    GPIO_TypeDef *busy_port;
-    uint16_t busy_pin;
-
-    GPIO_TypeDef *cs_port;
-    uint16_t cs_pin;
-} epd3in7_pins;
-
-typedef struct
-{
-    uint16_t width;
-    uint16_t height;
-    epd3in7_pins pins;
-    SPI_HandleTypeDef *spi_handle;
-    bool was_lut_sent;
-    epd3in7_lut_type last_lut;
-} epd3in7_handle;
+#endif
 
 /**
- * Create the e-Paper handle with given pin configuration
+ * @brief Display resolution
  */
-epd3in7_handle epd3in7_create(const epd3in7_pins pins, SPI_HandleTypeDef *spi_handle);
+#define EPD3IN7_WIDTH 280
+#define EPD3IN7_HEIGHT 480
 
 /**
- * Clear screen using GC LUT
+ * @brief Timeouts
  */
-void epd3in7_clear_4_gray(epd3in7_handle *handle);
+#define EPD3IN7_BUSY_TIMEOUT 12000
+#define EPD3IN7_SPI_TIMEOUT HAL_MAX_DELAY
 
-/**
- * Initialize the e-Paper registers for 4-gray level display
- */
-void epd3in7_init_4_gray(epd3in7_handle *handle);
+    /**
+     * @brief Display modes
+     */
+    typedef enum
+    {
+        EPD3IN7_MODE_GC = 1, /**< Global clear, full refresh */
+        EPD3IN7_MODE_DU = 2, /**< Direct update (partial refresh) */
+        EPD3IN7_MODE_A2 = 3  /**< Fast, but lower quality partial refresh */
+    } epd3in7_mode;
 
-/**
- * Send the 4-gray level image buffer to e-Paper and refresh the display
- */
-void epd3in7_display_4_gray(epd3in7_handle *handle, const uint8_t *image);
+    /**
+     * @brief Look-up table types
+     */
+    typedef enum
+    {
+        EPD3IN7_LUT_4_GRAY_GC = 0, /**< 4-level grayscale, global clear */
+        EPD3IN7_LUT_1_GRAY_GC = 1, /**< 1-bit (black & white), global clear */
+        EPD3IN7_LUT_1_GRAY_DU = 2, /**< 1-bit (black & white), direct update */
+        EPD3IN7_LUT_1_GRAY_A2 = 3  /**< 1-bit (black & white), A2 fast mode */
+    } epd3in7_lut_type;
 
-/**
- * Clear screen using GC LUT
- * @param mode:
- *   1 = GC; Global clear,
- *   2 = DU; Direct update (partial),
- *   3 = A2; Fast, but worse direct update (partial),
- */
-void epd3in7_clear_1_gray(epd3in7_handle *handle, const epd3in7_mode mode);
+    /**
+     * @brief Status codes
+     */
+    typedef enum
+    {
+        EPD3IN7_OK = 0,           /**< Operation completed successfully */
+        EPD3IN7_ERR_HAL = -1,     /**< HAL error occurred */
+        EPD3IN7_ERR_TIMEOUT = -2, /**< Operation timed out */
+        EPD3IN7_ERR_PARAM = -3    /**< Invalid parameter provided */
+    } epd3in7_status;
 
-/**
- * Initialize the e-Paper registers for 1-gray level display
- */
-void epd3in7_init_1_gray(epd3in7_handle *handle);
+    /**
+     * @brief GPIO pin configuration for the e-Paper display
+     */
+    typedef struct
+    {
+        GPIO_TypeDef *reset_port; /**< RESET pin port */
+        uint16_t reset_pin;       /**< RESET pin number */
 
-/**
- * Send the 1-gray level image buffer to e-Paper and refresh the display
- *   1 = GC; Global clear,
- *   2 = DU; Direct update (partial),
- *   3 = A2; Fast, but worse direct update (partial),
- */
-void epd3in7_display_1_gray(epd3in7_handle *handle, const uint8_t *image, const epd3in7_mode mode);
+        GPIO_TypeDef *dc_port; /**< DC pin port (Data/Command control) */
+        uint16_t dc_pin;       /**< DC pin number */
 
-/**
- * Send the top part of the 1-gray level image buffer to e-Paper and refresh the display
- *
- * Notes:
- * - You cannot refresh them with the partial refresh mode all the time.
- *   After refreshing partially several times, you need to fully refresh EPD once.
- *   Otherwise, the display effect will be abnormal, which cannot be repaired!
- *
- * - Before A2 partial update you need to run at least once at least once full width/height background image in DU mode.
- *   You can use for this any of the DU display funcs: `epd3in7_display_1_gray()`, `epd3in7_display_1_gray_top()`.
- *   Otherwise after partial update the rest of the image will be blank.
- *   After this "initial run", you can run it multiple times.
- *
- * - Should'nt be called after Clear() without a full Display() in between.
- */
-int epd3in7_display_1_gray_top(epd3in7_handle *handle, const uint8_t *image, const uint16_t y_end_exclusive, const epd3in7_mode mode);
+        GPIO_TypeDef *busy_port; /**< BUSY pin port */
+        uint16_t busy_pin;       /**< BUSY pin number */
 
-/**
- * Enter sleep mode
- *
- * Note: Note that the screen cannot be powered on for a long time.
- * When the screen is not refreshed, please set the screen to sleep mode or power off it.
- * Otherwise, the screen will remain in a high voltage state for a long time, which will damage the e-Paper and cannot be repaired!
- */
-void epd3in7_sleep(const epd3in7_handle *handle);
+        GPIO_TypeDef *cs_port; /**< CS pin port (Chip Select) */
+        uint16_t cs_pin;       /**< CS pin number */
+    } epd3in7_pins;
+
+    /**
+     * @brief Handle structure for the e-Paper display
+     */
+    typedef struct
+    {
+        uint16_t width;                /**< Display width */
+        uint16_t height;               /**< Display height */
+        epd3in7_pins pins;             /**< GPIO pin configuration */
+        SPI_HandleTypeDef *spi_handle; /**< SPI handle */
+        bool busy_active_high;         /**< BUSY pin polarity: 0 = active low (wait for low), 1 = active high (wait for high) */
+        bool was_lut_sent;             /**< Flag indicating if LUT was already sent */
+        bool is_cs_low;                /**< Flag indicating CS pin state */
+        epd3in7_lut_type last_lut;     /**< Last LUT type that was sent */
+    } epd3in7_handle;
+
+    /**
+     * @brief Create the e-Paper display handle with given pin configuration
+     *
+     * @param pins The GPIO pin configuration
+     * @param spi_handle Handle to the SPI peripheral
+     * @param busy_active_high BUSY pin polarity (0 = active low, 1 = active high)
+     * @return epd3in7_handle Handle for the e-Paper display
+     */
+    epd3in7_handle epd3in7_create(const epd3in7_pins pins, SPI_HandleTypeDef *spi_handle, const bool busy_active_high);
+
+    /* ---- 4-Gray Level Functions ---- */
+
+    /**
+     * @brief Initialize the e-Paper display for 4-gray level operation
+     *
+     * @param handle Pointer to the e-Paper display handle
+     * @return epd3in7_status Operation status
+     */
+    epd3in7_status epd3in7_init_4_gray(epd3in7_handle *handle);
+
+    /**
+     * @brief Clear screen using 4-gray level mode (GC LUT)
+     *
+     * @param handle Pointer to the e-Paper display handle
+     * @return epd3in7_status Operation status
+     */
+    epd3in7_status epd3in7_clear_4_gray(epd3in7_handle *handle);
+
+    /**
+     * @brief Send the 4-gray level image buffer to e-Paper and refresh the display
+     *
+     * @param handle Pointer to the e-Paper display handle
+     * @param image Pointer to the 4-gray level image buffer
+     * @return epd3in7_status Operation status
+     */
+    epd3in7_status epd3in7_display_4_gray(epd3in7_handle *handle, const uint8_t *image);
+
+    /* ---- 1-Gray Level (Black & White) Functions ---- */
+
+    /**
+     * @brief Initialize the e-Paper display for 1-gray level (black & white) operation
+     *
+     * @param handle Pointer to the e-Paper display handle
+     * @return epd3in7_status Operation status
+     */
+    epd3in7_status epd3in7_init_1_gray(epd3in7_handle *handle);
+
+    /**
+     * @brief Clear screen using 1-gray level (black & white) mode
+     *
+     * @param handle Pointer to the e-Paper display handle
+     * @param mode Refresh mode:
+     *             - EPD3IN7_MODE_GC: Global clear (full refresh)
+     *             - EPD3IN7_MODE_DU: Direct update (partial refresh)
+     *             - EPD3IN7_MODE_A2: Fast but lower quality partial refresh
+     * @return epd3in7_status Operation status
+     */
+    epd3in7_status epd3in7_clear_1_gray(epd3in7_handle *handle, const epd3in7_mode mode);
+
+    /**
+     * @brief Send the 1-gray level (black & white) image buffer to e-Paper and refresh the display
+     *
+     * @param handle Pointer to the e-Paper display handle
+     * @param image Pointer to the 1-gray level image buffer
+     * @param mode Refresh mode:
+     *             - EPD3IN7_MODE_GC: Global clear (full refresh)
+     *             - EPD3IN7_MODE_DU: Direct update (partial refresh)
+     *             - EPD3IN7_MODE_A2: Fast but lower quality partial refresh
+     * @return epd3in7_status Operation status
+     */
+    epd3in7_status epd3in7_display_1_gray(epd3in7_handle *handle, const uint8_t *image, const epd3in7_mode mode);
+
+    /**
+     * @brief Send the top part of the 1-gray level (black & white) image buffer to e-Paper
+     *        and refresh the display
+     *
+     * @param handle Pointer to the e-Paper display handle
+     * @param image Pointer to the 1-gray level image buffer
+     * @param y_end_exclusive The exclusive Y-coordinate endpoint (height) of the area to update
+     * @param mode Refresh mode:
+     *             - EPD3IN7_MODE_GC: Global clear (full refresh)
+     *             - EPD3IN7_MODE_DU: Direct update (partial refresh)
+     *             - EPD3IN7_MODE_A2: Fast but lower quality partial refresh
+     * @return epd3in7_status Operation status
+     *
+     * @note Important usage guidelines:
+     * - You cannot refresh using partial refresh mode all the time.
+     *   After refreshing partially several times, you need to fully refresh the display once.
+     *   Otherwise, the display quality will deteriorate and cannot be recovered!
+     *
+     * - Before A2 partial update, you must run at least once a full width/height background
+     *   image in DU mode. You can use any of the DU display functions for this:
+     *   `epd3in7_display_1_gray()` or `epd3in7_display_1_gray_top()`.
+     *   Otherwise, after partial update the rest of the image will be blank.
+     *
+     * - This function should not be called after Clear() without a full Display() in between.
+     */
+    epd3in7_status epd3in7_display_1_gray_top(epd3in7_handle *handle, const uint8_t *image, const uint16_t y_end_exclusive, const epd3in7_mode mode);
+
+    /**
+     * @brief Enter sleep mode to conserve power and protect the display
+     *
+     * @param handle Pointer to the e-Paper display handle
+     * @return epd3in7_status Operation status
+     *
+     * @note IMPORTANT: The display cannot be powered on for extended periods.
+     * When the display is not being refreshed, always put it into sleep mode or power it off.
+     * Otherwise, the display will remain in a high voltage state for a long time,
+     * which will permanently damage the e-Paper and cannot be repaired!
+     */
+    epd3in7_status epd3in7_sleep(const epd3in7_handle *handle);
+
+#ifdef __cplusplus
+}
+#endif
