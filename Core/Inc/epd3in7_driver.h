@@ -1,11 +1,12 @@
 /*****************************************************************************
- * | File          :   epd3in7.h
- * | Author        :   Waveshare team, Sandro
- * | Function      :   3.7inch e-paper driver (Waveshare 20123)
+ * | File          :   epd3in7_driver.h
+ * | Author        :   h4570 (based on Waveshare code)
+ * | Function      :   quasi-async alternative driver for official 3.7inch e-paper display (Waveshare 20123)
  *----------------
  * | Version       :   V1.0
- * | Date          :   2025-09-15
+ * | Date          :   2025-09-19
  ******************************************************************************/
+
 #pragma once
 
 #include "stm32g4xx_hal.h"
