@@ -203,7 +203,7 @@ int main(void)
   epd3in7_panel_handle epd3in7_panel = epd3in7_panel_init(&epd3in7_drv);
 
   epd3in7_driver_init_1_gray(&epd3in7_drv);
-  epd3in7_driver_clear_1_gray(&epd3in7_drv, EPD3IN7_DRIVER_MODE_GC, false);
+  epd3in7_driver_clear_1_gray(&epd3in7_drv, EPD3IN7_DRIVER_MODE_GC);
 
   uint8_t black = 1;              // starting with black square
   uint8_t partial_since_full = 0; // count partial updates since last full refresh
@@ -211,8 +211,8 @@ int main(void)
 
   // One-time "top full" push so partials won't blank the rest
   draw_checker_full();
-  epd3in7_driver_display_1_gray(&epd3in7_drv, frame_bw, EPD3IN7_DRIVER_MODE_GC, false); // GC
-  epd3in7_driver_display_1_gray(&epd3in7_drv, frame_bw, EPD3IN7_DRIVER_MODE_DU, false); // DU
+  epd3in7_driver_display_1_gray(&epd3in7_drv, frame_bw, EPD3IN7_DRIVER_MODE_GC); // GC
+  epd3in7_driver_display_1_gray(&epd3in7_drv, frame_bw, EPD3IN7_DRIVER_MODE_DU); // DU
 
   while (1)
   {
@@ -223,7 +223,7 @@ int main(void)
     draw_filled_square_on_strip(strip_buf, black);
 
     // 3) Send the partial update (top stripe only)
-    epd3in7_driver_display_1_gray_top(&epd3in7_drv, strip_buf, STRIP_H, EPD3IN7_DRIVER_LUT_1_GRAY_A2, false);
+    epd3in7_driver_display_1_gray_top(&epd3in7_drv, strip_buf, STRIP_H, EPD3IN7_DRIVER_LUT_1_GRAY_A2);
 
     // 4) Update shadow buffer so the next partial starts from the latest image
     strip_copy_to_shadow(frame_bw, strip_buf, STRIP_H);
@@ -237,7 +237,7 @@ int main(void)
     if (partial_since_full >= 5)
     {
       // Full-screen refresh with the current shadow buffer
-      epd3in7_driver_display_1_gray(&epd3in7_drv, frame_bw, EPD3IN7_DRIVER_MODE_GC, false);
+      epd3in7_driver_display_1_gray(&epd3in7_drv, frame_bw, EPD3IN7_DRIVER_MODE_GC);
       partial_since_full = 0;
     }
 
