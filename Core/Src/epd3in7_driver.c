@@ -145,27 +145,37 @@ static void epd3in7_driver_send_begin(epd3in7_driver_handle *handle)
 {
     HAL_GPIO_WritePin(handle->pins.cs_port, handle->pins.cs_pin, GPIO_PIN_RESET);
     handle->is_cs_low = true;
+    handle->is_cs_low_has_value = true;
 }
 
 static void epd3in7_driver_send_end(epd3in7_driver_handle *handle)
 {
     HAL_GPIO_WritePin(handle->pins.cs_port, handle->pins.cs_pin, GPIO_PIN_SET);
     handle->is_cs_low = false;
+    handle->is_cs_low_has_value = true;
 }
 
-static epd3in7_driver_status epd3in7_driver_send_command(const epd3in7_driver_handle *handle, const epd3in7_driver_cmd reg)
+static epd3in7_driver_status epd3in7_driver_send_command(epd3in7_driver_handle *handle, const epd3in7_driver_cmd reg)
 {
     HAL_GPIO_WritePin(handle->pins.dc_port, handle->pins.dc_pin, GPIO_PIN_RESET);
+
     if (HAL_SPI_Transmit(handle->spi_handle, (uint8_t *)&reg, 1, EPD3IN7_DRIVER_SPI_TIMEOUT) != HAL_OK)
+    {
         return EPD3IN7_DRIVER_ERR_HAL;
+    }
+
     return EPD3IN7_DRIVER_OK;
 }
 
-static epd3in7_driver_status epd3in7_driver_send_data(const epd3in7_driver_handle *handle, const uint8_t data)
+static epd3in7_driver_status epd3in7_driver_send_data(epd3in7_driver_handle *handle, const uint8_t data)
 {
     HAL_GPIO_WritePin(handle->pins.dc_port, handle->pins.dc_pin, GPIO_PIN_SET);
+
     if (HAL_SPI_Transmit(handle->spi_handle, &data, 1, EPD3IN7_DRIVER_SPI_TIMEOUT) != HAL_OK)
+    {
         return EPD3IN7_DRIVER_ERR_HAL;
+    }
+
     return EPD3IN7_DRIVER_OK;
 }
 
@@ -235,12 +245,12 @@ static epd3in7_driver_lut_type epd3in7_driver_mode_to_lut(const epd3in7_driver_m
  */
 static epd3in7_driver_status epd3in7_driver_load_lut(epd3in7_driver_handle *handle, const epd3in7_driver_lut_type lut)
 {
-    if (handle->was_lut_sent && handle->last_lut == lut)
+    if (handle->last_lut_has_value && handle->last_lut == lut)
     {
         return EPD3IN7_DRIVER_OK;
     }
 
-    if (handle->is_cs_low == false)
+    if (handle->is_cs_low == false || handle->is_cs_low_has_value == false)
     {
         return EPD3IN7_DRIVER_ERR_PARAM;
     }
@@ -283,7 +293,7 @@ static epd3in7_driver_status epd3in7_driver_load_lut(epd3in7_driver_handle *hand
         }
     }
 
-    handle->was_lut_sent = true;
+    handle->last_lut_has_value = true;
     handle->last_lut = lut;
 
     return err;
@@ -292,13 +302,20 @@ static epd3in7_driver_status epd3in7_driver_load_lut(epd3in7_driver_handle *hand
 epd3in7_driver_handle epd3in7_driver_create(const epd3in7_driver_pins pins, SPI_HandleTypeDef *spi_handle, const bool busy_active_high)
 {
     epd3in7_driver_handle handle;
+
     handle.width = EPD3IN7_WIDTH;
     handle.height = EPD3IN7_HEIGHT;
+
     handle.pins = pins;
     handle.spi_handle = spi_handle;
-    handle.was_lut_sent = false;
-    handle.last_lut = EPD3IN7_DRIVER_LUT_4_GRAY_GC;
     handle.busy_active_high = busy_active_high;
+
+    handle.last_lut_has_value = false;
+    handle.last_lut = EPD3IN7_DRIVER_LUT_4_GRAY_GC;
+
+    handle.is_cs_low = false;
+    handle.is_cs_low_has_value = false;
+
     return handle;
 }
 
@@ -395,7 +412,7 @@ epd3in7_driver_status epd3in7_driver_init_4_gray(epd3in7_driver_handle *handle)
 
     epd3in7_driver_send_end(handle);
 
-    handle->was_lut_sent = false;
+    handle->last_lut_has_value = false;
     return EPD3IN7_DRIVER_OK;
 fail:
     epd3in7_driver_send_end(handle);
@@ -465,18 +482,20 @@ epd3in7_driver_status epd3in7_driver_init_1_gray(epd3in7_driver_handle *handle)
 
     epd3in7_driver_send_end(handle);
 
-    handle->was_lut_sent = false;
+    handle->last_lut_has_value = false;
     return EPD3IN7_DRIVER_OK;
 fail:
     epd3in7_driver_send_end(handle);
     return err;
 }
 
-epd3in7_driver_status epd3in7_driver_clear_4_gray(epd3in7_driver_handle *handle)
+epd3in7_driver_status epd3in7_driver_clear_4_gray(epd3in7_driver_handle *handle, const bool wait)
 {
     epd3in7_driver_status err = EPD3IN7_DRIVER_OK;
     uint16_t width = (EPD3IN7_WIDTH % 8 == 0) ? (EPD3IN7_WIDTH / 8) : (EPD3IN7_WIDTH / 8 + 1);
     uint16_t height = EPD3IN7_HEIGHT;
+
+    EPD3IN7_DRIVER_TRY(epd3in7_driver_busy_wait_for_idle(handle));
 
     epd3in7_driver_send_begin(handle);
 
@@ -530,7 +549,11 @@ epd3in7_driver_status epd3in7_driver_clear_4_gray(epd3in7_driver_handle *handle)
     EPD3IN7_DRIVER_TRY(epd3in7_driver_send_command(handle, EPD_CMD_DISPLAY_UPDATE_SEQUENCE));
     epd3in7_driver_send_end(handle);
 
-    EPD3IN7_DRIVER_TRY(epd3in7_driver_busy_wait_for_idle(handle));
+    if (wait)
+    {
+        EPD3IN7_DRIVER_TRY(epd3in7_driver_busy_wait_for_idle(handle));
+    }
+
     return EPD3IN7_DRIVER_OK;
 
 fail:
@@ -538,10 +561,12 @@ fail:
     return err;
 }
 
-epd3in7_driver_status epd3in7_driver_clear_1_gray(epd3in7_driver_handle *handle, const epd3in7_driver_mode mode)
+epd3in7_driver_status epd3in7_driver_clear_1_gray(epd3in7_driver_handle *handle, const epd3in7_driver_mode mode, const bool wait)
 {
     epd3in7_driver_status err = EPD3IN7_DRIVER_OK;
     const uint16_t image_counter = EPD3IN7_WIDTH * EPD3IN7_HEIGHT / 8;
+
+    EPD3IN7_DRIVER_TRY(epd3in7_driver_busy_wait_for_idle(handle));
 
     epd3in7_driver_send_begin(handle);
 
@@ -570,7 +595,11 @@ epd3in7_driver_status epd3in7_driver_clear_1_gray(epd3in7_driver_handle *handle,
     EPD3IN7_DRIVER_TRY(epd3in7_driver_send_command(handle, EPD_CMD_DISPLAY_UPDATE_SEQUENCE));
     epd3in7_driver_send_end(handle);
 
-    EPD3IN7_DRIVER_TRY(epd3in7_driver_busy_wait_for_idle(handle));
+    if (wait)
+    {
+        EPD3IN7_DRIVER_TRY(epd3in7_driver_busy_wait_for_idle(handle));
+    }
+
     return EPD3IN7_DRIVER_OK;
 
 fail:
@@ -578,10 +607,12 @@ fail:
     return err;
 }
 
-epd3in7_driver_status epd3in7_driver_display_4_gray(epd3in7_driver_handle *handle, const uint8_t *image)
+epd3in7_driver_status epd3in7_driver_display_4_gray(epd3in7_driver_handle *handle, const uint8_t *image, const bool wait)
 {
     epd3in7_driver_status err = EPD3IN7_DRIVER_OK;
     const uint16_t image_counter = EPD3IN7_WIDTH * EPD3IN7_HEIGHT / 8;
+
+    EPD3IN7_DRIVER_TRY(epd3in7_driver_busy_wait_for_idle(handle));
 
     epd3in7_driver_send_begin(handle);
 
@@ -690,16 +721,23 @@ epd3in7_driver_status epd3in7_driver_display_4_gray(epd3in7_driver_handle *handl
     EPD3IN7_DRIVER_TRY(epd3in7_driver_send_command(handle, EPD_CMD_DISPLAY_UPDATE_SEQUENCE));
     epd3in7_driver_send_end(handle);
 
-    EPD3IN7_DRIVER_TRY(epd3in7_driver_busy_wait_for_idle(handle));
+    if (wait)
+    {
+        EPD3IN7_DRIVER_TRY(epd3in7_driver_busy_wait_for_idle(handle));
+    }
+
     return EPD3IN7_DRIVER_OK;
 fail:
     epd3in7_driver_send_end(handle);
     return err;
 }
 
-epd3in7_driver_status epd3in7_driver_display_1_gray(epd3in7_driver_handle *handle, const uint8_t *image, const epd3in7_driver_mode mode)
+epd3in7_driver_status epd3in7_driver_display_1_gray(epd3in7_driver_handle *handle, const uint8_t *image, const epd3in7_driver_mode mode, const bool wait)
 {
     epd3in7_driver_status err = EPD3IN7_DRIVER_OK;
+
+    EPD3IN7_DRIVER_TRY(epd3in7_driver_busy_wait_for_idle(handle));
+
     epd3in7_driver_send_begin(handle);
 
     EPD3IN7_DRIVER_TRY(epd3in7_driver_send_command(handle, EPD_CMD_SET_RAMX_START_END));
@@ -727,14 +765,18 @@ epd3in7_driver_status epd3in7_driver_display_1_gray(epd3in7_driver_handle *handl
     EPD3IN7_DRIVER_TRY(epd3in7_driver_send_command(handle, EPD_CMD_DISPLAY_UPDATE_SEQUENCE));
     epd3in7_driver_send_end(handle);
 
-    EPD3IN7_DRIVER_TRY(epd3in7_driver_busy_wait_for_idle(handle));
+    if (wait)
+    {
+        EPD3IN7_DRIVER_TRY(epd3in7_driver_busy_wait_for_idle(handle));
+    }
+
     return EPD3IN7_DRIVER_OK;
 fail:
     epd3in7_driver_send_end(handle);
     return err;
 }
 
-epd3in7_driver_status epd3in7_driver_display_1_gray_top(epd3in7_driver_handle *handle, const uint8_t *image, const uint16_t y_end_exclusive, const epd3in7_driver_mode mode)
+epd3in7_driver_status epd3in7_driver_display_1_gray_top(epd3in7_driver_handle *handle, const uint8_t *image, const uint16_t y_end_exclusive, const epd3in7_driver_mode mode, const bool wait)
 {
     epd3in7_driver_status err = EPD3IN7_DRIVER_OK;
     uint16_t x_start = 0;
@@ -754,6 +796,8 @@ epd3in7_driver_status epd3in7_driver_display_1_gray_top(epd3in7_driver_handle *h
 
     x_end -= 1;
     y_end_exclusive_temp -= 1;
+
+    EPD3IN7_DRIVER_TRY(epd3in7_driver_busy_wait_for_idle(handle));
 
     epd3in7_driver_send_begin(handle);
 
@@ -793,7 +837,10 @@ epd3in7_driver_status epd3in7_driver_display_1_gray_top(epd3in7_driver_handle *h
     EPD3IN7_DRIVER_TRY(epd3in7_driver_send_command(handle, EPD_CMD_DISPLAY_UPDATE_SEQUENCE));
     epd3in7_driver_send_end(handle);
 
-    EPD3IN7_DRIVER_TRY(epd3in7_driver_busy_wait_for_idle(handle));
+    if (wait)
+    {
+        EPD3IN7_DRIVER_TRY(epd3in7_driver_busy_wait_for_idle(handle));
+    }
 
     return 0;
 
@@ -802,7 +849,7 @@ fail:
     return err;
 }
 
-epd3in7_driver_status epd3in7_driver_sleep(const epd3in7_driver_handle *handle)
+epd3in7_driver_status epd3in7_driver_sleep(epd3in7_driver_handle *handle)
 {
     epd3in7_driver_status err = EPD3IN7_DRIVER_OK;
 
