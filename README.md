@@ -2,7 +2,7 @@
 
 This repository contains a quasi-async alternative driver for the official 3.7-inch e-paper display (Waveshare 20123) for STM32 microcontrollers using the HAL library.
 
-![Waveshare 3.7" E-Paper Display](https://www.waveshare.com/w/thumbs/1/1d/3.7inch-e-Paper-E-Ink-Display-Module-1.jpg)
+![Waveshare 3.7" E-Paper Display](https://hasto.pl/wp-content/uploads/2025/09/stm32-nucleo-waveshare-caly-zestaw-Large.jpg)
 
 ## Features
 
