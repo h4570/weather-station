@@ -54,8 +54,12 @@ COM_InitTypeDef BspCOMInit;
 
 // Buffer for the full black/white image (1bpp)
 #define STRIDE_BYTES ((EPD3IN7_WIDTH + 7) / 8)
-#define PALETTE_BYTES 8 // I1: 2 colors * 4 bytes (ARGB32)
-static LV_ATTRIBUTE_MEM_ALIGN uint8_t lvgl_buffer[PALETTE_BYTES + STRIDE_BYTES * EPD3IN7_HEIGHT];
+#define DISPLAY_BUFFER_SIZE (STRIDE_BYTES * EPD3IN7_HEIGHT)
+// I1: 2 colors * 4 bytes (ARGB32)
+#define LVGL_PALETTE_BYTES 8
+
+static LV_ATTRIBUTE_MEM_ALIGN uint8_t lvgl_buffer[LVGL_PALETTE_BYTES + DISPLAY_BUFFER_SIZE];
+static uint8_t epd3in7_adapter_work_buffer[DISPLAY_BUFFER_SIZE];
 
 static void draw_corners(void)
 {
@@ -177,10 +181,12 @@ int main(void)
                                                                 .cs_pin = DISP_CS_Pin},
                                                             &hspi2, true);
 
+  epd3in7_lvgl_adapter_handle epd3in7_adapter = epd3in7_lvgl_adapter_create(&epd3in7_drv, epd3in7_adapter_work_buffer);
+
   lv_init();
   lv_tick_set_cb(HAL_GetTick);
   lv_display_t *display = lv_display_create(EPD3IN7_WIDTH, EPD3IN7_HEIGHT);
-  lv_display_set_driver_data(display, &epd3in7_drv);
+  lv_display_set_driver_data(display, &epd3in7_adapter);
   lv_display_set_buffers(display, lvgl_buffer, NULL, sizeof(lvgl_buffer), LV_DISPLAY_RENDER_MODE_FULL);
   lv_display_set_flush_cb(display, epd3in7_lvgl_adapter_flush);
   lv_display_set_rotation(display, LV_DISPLAY_ROTATION_90);

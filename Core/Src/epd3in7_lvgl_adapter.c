@@ -1,9 +1,21 @@
 #include "epd3in7_lvgl_adapter.h"
 #include <string.h>
 
-#define EPD3IN7_LVGL_ADAPTER_PALLETE_BYTES 8 // I1: 2 colors * 4 bytes (ARGB32)
+#define EPD3IN7_LVGL_ADAPTER_CHANGE_DETECTION_ROWS_PER_SECTION 32
 
-static uint8_t epd3in7_lvgl_adapter_work_buffer[(EPD3IN7_WIDTH * EPD3IN7_HEIGHT) / 8];
+// Simple, fast 32-bit FNV-1a hash for sector data
+static uint32_t epd3in7_lvgl_adapter_hash32(const void *data, size_t len)
+{
+    const uint8_t *p = (const uint8_t *)data;
+    uint32_t h = 2166136261u;         // FNV offset basis
+    const uint32_t prime = 16777619u; // FNV prime
+    for (size_t i = 0; i < len; ++i)
+    {
+        h ^= p[i];
+        h *= prime;
+    }
+    return h;
+}
 
 /**
  * Rotate a 1bpp (I1) bitmap. Operates only on pixels (excludes the 8-byte palette).
@@ -81,9 +93,103 @@ static void epd3in7_lvgl_adapter_rotate(const void *src, void *dst, int32_t src_
     }
 }
 
+/**
+ * @brief Split a 1bpp area buffer into vertical row-based sectors
+ *
+ * The buffer must point to the top-left pixel of `area` in 1bpp (I1) format,
+ * with `stride` bytes per row (typically (width+7)/8). The function creates
+ * about ceil(height / rows_per_sector) sectors. Each sector points into the
+ * original buffer (no copy), and has an `lv_area_t` describing its absolute
+ * screen rectangle.
+ *
+ * @param area             Area (absolute LVGL coordinates) that `buffer` represents
+ * @param buffer           Pointer to 1bpp data for `area` (palette already skipped)
+ * @param stride           Bytes per row of `buffer`
+ * @param rows_per_sector  Preferred maximum number of rows in each sector (>=1)
+ * @param out_list         Output sector list; caller must free with epd3in7_lvgl_adapter_sector_list_free()
+ * @return true on success, false on invalid params or allocation failure
+ */
+static bool epd3in7_lvgl_adapter_make_sectors_rows(const lv_area_t *area,
+                                                   const uint8_t *buffer,
+                                                   uint32_t stride,
+                                                   uint16_t rows_per_sector,
+                                                   epd3in7_lvgl_adapter_sector_list *out_list)
+{
+    if (!area || !buffer || !out_list || rows_per_sector == 0)
+        return false;
+
+    const int32_t h = lv_area_get_height(area);
+    const int32_t w = lv_area_get_width(area);
+    if (h <= 0 || w <= 0)
+        return false;
+
+    uint16_t count = (uint16_t)((h + rows_per_sector - 1) / rows_per_sector);
+    if (count == 0)
+        return false;
+
+    epd3in7_lvgl_adapter_sector *items = (epd3in7_lvgl_adapter_sector *)lv_malloc(sizeof(epd3in7_lvgl_adapter_sector) * count);
+    if (!items)
+        return false;
+
+    for (uint16_t i = 0; i < count; ++i)
+    {
+        int32_t y_off = (int32_t)i * (int32_t)rows_per_sector;
+        int32_t rows = rows_per_sector;
+        if (y_off + rows > h)
+            rows = h - y_off;
+
+        epd3in7_lvgl_adapter_sector *s = &items[i];
+        s->data = buffer + (size_t)stride * (size_t)y_off;
+        s->area.x1 = area->x1;
+        s->area.x2 = area->x2;
+        s->area.y1 = area->y1 + y_off;
+        s->area.y2 = s->area.y1 + rows - 1;
+        s->hash = epd3in7_lvgl_adapter_hash32(s->data, (size_t)rows * (size_t)stride);
+    }
+
+    out_list->items = items;
+    out_list->count = count;
+    return true;
+}
+
+/**
+ * @brief Free a list produced by epd3in7_lvgl_adapter_make_sectors_rows
+ */
+static void epd3in7_lvgl_adapter_sector_list_free(epd3in7_lvgl_adapter_sector_list *list)
+{
+    if (!list)
+        return;
+
+    if (list->items)
+    {
+        lv_free(list->items);
+        list->items = NULL;
+    }
+
+    list->count = 0;
+}
+
+epd3in7_lvgl_adapter_handle epd3in7_lvgl_adapter_create(epd3in7_driver_handle *driver, uint8_t *work_buffer)
+{
+    epd3in7_lvgl_adapter_handle handle;
+    handle.driver = driver;
+    handle.work_buffer = work_buffer;
+    handle.current_sectors.items = NULL;
+    handle.current_sectors.count = 0;
+    return handle;
+}
+
+void epd3in7_lvgl_adapter_free(epd3in7_lvgl_adapter_handle *handle)
+{
+    if (!handle)
+        return;
+
+    epd3in7_lvgl_adapter_sector_list_free(&handle->current_sectors);
+}
+
 void epd3in7_lvgl_adapter_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
 {
-    epd3in7_driver_handle *h = lv_display_get_driver_data(disp);
+    epd3in7_lvgl_adapter_handle *h = lv_display_get_driver_data(disp);
 
     if (!h || !area || !px_map)
     {
@@ -91,17 +197,21 @@ void epd3in7_lvgl_adapter_flush(lv_display_t *disp, const lv_area_t *area, uint8
         return;
     }
 
+    // I1: 2 colors * 4 bytes (ARGB32)
+    static uint8_t palette_bytes = 8;
+    lv_area_t rotated_area;
+
     lv_display_rotation_t rotation = lv_display_get_rotation(disp);
 
     // LVGL I1: first 8 bytes in LVGL buffer is palette (2 colors * 4 bytes ARGB32)
     // We need to skip it, because EPD3IN7 driver expects pure 1bpp data
-    uint8_t *src = px_map + EPD3IN7_LVGL_ADAPTER_PALLETE_BYTES;
+    uint8_t *src = px_map + palette_bytes;
 
     if (rotation != LV_DISPLAY_ROTATION_0)
     {
         lv_color_format_t cf = lv_display_get_color_format(disp);
 
-        lv_area_t rotated_area = *area;
+        rotated_area = *area;
         lv_display_rotate_area(disp, &rotated_area);
 
         uint32_t src_stride = lv_draw_buf_width_to_stride(lv_area_get_width(area), cf);
@@ -110,13 +220,30 @@ void epd3in7_lvgl_adapter_flush(lv_display_t *disp, const lv_area_t *area, uint8
         int32_t src_w = lv_area_get_width(area);
         int32_t src_h = lv_area_get_height(area);
 
-        epd3in7_lvgl_adapter_rotate(src, epd3in7_lvgl_adapter_work_buffer, src_w, src_h, src_stride, dest_stride, rotation);
+        epd3in7_lvgl_adapter_rotate(src, h->work_buffer, src_w, src_h, src_stride, dest_stride, rotation);
 
         area = &rotated_area;
-        src = epd3in7_lvgl_adapter_work_buffer;
+        src = h->work_buffer;
     }
 
-    epd3in7_driver_display_1_gray(h, src, EPD3IN7_DRIVER_MODE_GC);
+    { // Change detection
+        lv_color_format_t cf = lv_display_get_color_format(disp);
+        uint32_t stride = lv_draw_buf_width_to_stride(lv_area_get_width(area), cf);
+
+        if (h->current_sectors.items != NULL)
+        {
+            // Free previous sectors
+            epd3in7_lvgl_adapter_sector_list_free(&h->current_sectors);
+        }
+
+        if (epd3in7_lvgl_adapter_make_sectors_rows(area, src, stride, EPD3IN7_LVGL_ADAPTER_CHANGE_DETECTION_ROWS_PER_SECTION, &h->current_sectors))
+        {
+        }
+    }
+
+    epd3in7_driver_display_1_gray(h->driver, src, EPD3IN7_DRIVER_MODE_GC);
+
+    // epd3in7_driver_display_1_gray_top
 
     lv_display_flush_ready(disp);
 }

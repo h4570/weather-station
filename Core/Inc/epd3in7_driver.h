@@ -214,7 +214,7 @@ extern "C"
      *   `epd3in7_driver_display_1_gray()` or `epd3in7_driver_display_1_gray_top()`.
      *   Otherwise, after partial update the rest of the image will be blank.
      *
-     * - This function should not be called after Clear() without a full Display() in between.
+     * - This function should not be called after epd3in7_driver_clear_1_gray() without a full epd3in7_driver_display_1_gray() in between.
      */
     epd3in7_driver_status epd3in7_driver_display_1_gray_top(epd3in7_driver_handle *handle, const uint8_t *image, const uint16_t y_end_exclusive, const epd3in7_driver_mode mode);
 
