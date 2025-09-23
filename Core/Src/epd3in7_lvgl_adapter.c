@@ -1,8 +1,6 @@
 #include "epd3in7_lvgl_adapter.h"
 #include <string.h>
 
-#define EPD3IN7_LVGL_ADAPTER_CHANGE_DETECTION_ROWS_PER_SECTION 32
-
 // Simple, fast 32-bit FNV-1a hash for sector data
 static uint32_t epd3in7_lvgl_adapter_hash32(const void *data, size_t len)
 {
@@ -192,7 +190,7 @@ static bool epd3in7_lvgl_adapter_has_changes(const epd3in7_lvgl_adapter_sector_l
     return false; // No changes found
 }
 
-epd3in7_lvgl_adapter_handle epd3in7_lvgl_adapter_create(epd3in7_driver_handle *driver, uint8_t *work_buffer)
+epd3in7_lvgl_adapter_handle epd3in7_lvgl_adapter_create(epd3in7_driver_handle *driver, uint8_t *work_buffer, int8_t refresh_cycles_before_gc, epd3in7_driver_mode default_mode, int8_t change_detection_rows_per_section)
 {
     epd3in7_lvgl_adapter_handle handle;
     handle.driver = driver;
@@ -203,6 +201,9 @@ epd3in7_lvgl_adapter_handle epd3in7_lvgl_adapter_create(epd3in7_driver_handle *d
     handle.previous_sectors.count = 0;
     handle.refresh_counter = 0;
     handle.is_initialized = false;
+    handle.refresh_cycles_before_gc = refresh_cycles_before_gc;
+    handle.default_mode = default_mode;
+    handle.change_detection_rows_per_section = change_detection_rows_per_section;
     return handle;
 }
 
@@ -282,7 +283,7 @@ void epd3in7_lvgl_adapter_flush(lv_display_t *disp, const lv_area_t *area, uint8
         lv_color_format_t cf = lv_display_get_color_format(disp);
         uint32_t stride = lv_draw_buf_width_to_stride(lv_area_get_width(area), cf);
 
-        if (!epd3in7_lvgl_adapter_make_sectors_rows(area, src, stride, EPD3IN7_LVGL_ADAPTER_CHANGE_DETECTION_ROWS_PER_SECTION, &h->current_sectors))
+        if (!epd3in7_lvgl_adapter_make_sectors_rows(area, src, stride, h->change_detection_rows_per_section, &h->current_sectors))
         {
             // Fallback to full refresh if sector creation failed
             epd3in7_driver_display_1_gray(h->driver, src, EPD3IN7_DRIVER_MODE_GC);
@@ -297,9 +298,9 @@ void epd3in7_lvgl_adapter_flush(lv_display_t *disp, const lv_area_t *area, uint8
     epd3in7_driver_mode mode;
 
     // Every 10th refresh: full GC refresh
-    if (h->refresh_counter >= 9)
+    if (h->refresh_counter >= h->refresh_cycles_before_gc - 1)
     {
-        mode = EPD3IN7_DRIVER_MODE_GC;
+        mode = h->default_mode;
         h->refresh_counter = 0;
     }
     else
@@ -310,7 +311,7 @@ void epd3in7_lvgl_adapter_flush(lv_display_t *disp, const lv_area_t *area, uint8
         if (has_changes)
         {
             // Changes detected - use DU mode
-            mode = EPD3IN7_DRIVER_MODE_DU;
+            mode = EPD3IN7_DRIVER_MODE_A2;
             h->refresh_counter++;
         }
         else

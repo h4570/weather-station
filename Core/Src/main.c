@@ -184,7 +184,12 @@ int main(void)
                                                                 .cs_pin = DISP_CS_Pin},
                                                             &hspi2, true);
 
-  epd3in7_lvgl_adapter_handle epd3in7_adapter = epd3in7_lvgl_adapter_create(&epd3in7_drv, epd3in7_adapter_work_buffer);
+  epd3in7_lvgl_adapter_handle epd3in7_adapter = epd3in7_lvgl_adapter_create(
+      &epd3in7_drv,
+      epd3in7_adapter_work_buffer,
+      10,
+      EPD3IN7_DRIVER_MODE_A2,
+      32);
 
   lv_init();
   lv_tick_set_cb(HAL_GetTick);

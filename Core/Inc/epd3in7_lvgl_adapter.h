@@ -39,15 +39,21 @@ extern "C"
         epd3in7_lvgl_adapter_sector_list previous_sectors; /**< Previously rendered sectors (for change detection) */
         uint8_t refresh_counter;                           /**< Counter for refresh cycles (0-9, resets to 0 after GC) */
         bool is_initialized;                               /**< Flag indicating if display has been initialized */
+        int8_t refresh_cycles_before_gc;                   /**< Number of refresh cycles before forcing a GC refresh */
+        epd3in7_driver_mode default_mode;                  /**< DU or A2 */
+        int8_t change_detection_rows_per_section;          /**< Number of rows per section for change detection */
     } epd3in7_lvgl_adapter_handle;
 
     /**
      * @brief Create and initialize an e-Paper LVGL adapter handle
      * @param driver Pointer to the initialized e-Paper driver handle
      * @param work_buffer Pointer to a work buffer for image processing (size: width * height / 8 bytes)
+     * @param refresh_cycles_before_gc Number of refresh cycles before forcing a GC refresh (default: 10)
+     * @param default_mode Default refresh mode: EPD3IN7_DRIVER_MODE_A2 or EPD3IN7_DRIVER_MODE_DU (default: EPD3IN7_DRIVER_MODE_A2)
+     * @param change_detection_rows_per_section Number of rows per section for change detection (default: 32)
      * @return epd3in7_lvgl_adapter_handle The initialized adapter handle
      */
-    epd3in7_lvgl_adapter_handle epd3in7_lvgl_adapter_create(epd3in7_driver_handle *driver, uint8_t *work_buffer);
+    epd3in7_lvgl_adapter_handle epd3in7_lvgl_adapter_create(epd3in7_driver_handle *driver, uint8_t *work_buffer, int8_t refresh_cycles_before_gc, epd3in7_driver_mode default_mode, int8_t change_detection_rows_per_section);
 
     /**
      * @brief Free resources associated with the e-Paper LVGL adapter handle (currently `current_sectors` only)
