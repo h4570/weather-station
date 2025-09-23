@@ -300,7 +300,7 @@ void epd3in7_lvgl_adapter_flush(lv_display_t *disp, const lv_area_t *area, uint8
     // Every 10th refresh: full GC refresh
     if (h->refresh_counter >= h->refresh_cycles_before_gc - 1)
     {
-        mode = h->default_mode;
+        mode = EPD3IN7_DRIVER_LUT_1_GRAY_GC;
         h->refresh_counter = 0;
     }
     else
@@ -310,8 +310,8 @@ void epd3in7_lvgl_adapter_flush(lv_display_t *disp, const lv_area_t *area, uint8
 
         if (has_changes)
         {
-            // Changes detected - use DU mode
-            mode = EPD3IN7_DRIVER_MODE_A2;
+            // Changes detected - use default mode
+            mode = h->default_mode;
             h->refresh_counter++;
         }
         else
