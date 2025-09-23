@@ -61,10 +61,13 @@ COM_InitTypeDef BspCOMInit;
 static LV_ATTRIBUTE_MEM_ALIGN uint8_t lvgl_buffer[LVGL_PALETTE_BYTES + DISPLAY_BUFFER_SIZE];
 static uint8_t epd3in7_adapter_work_buffer[DISPLAY_BUFFER_SIZE];
 
-static void draw_corners(void)
+static void draw_corners(const int32_t image_padding_x, const int32_t image_padding_y)
 {
   lv_obj_t *scr = lv_screen_active();
   const int pad = 6;
+
+  // Clear
+  lv_obj_clean(scr);
 
   // White background
   lv_obj_set_style_bg_color(scr, lv_color_white(), 0);
@@ -95,7 +98,7 @@ static void draw_corners(void)
   lv_obj_t *img = lv_img_create(scr);
   lv_img_set_src(img, &hasto_logo);
   lv_obj_center(img);
-  lv_obj_align(img, LV_ALIGN_CENTER, 0, -20);
+  lv_obj_align(img, LV_ALIGN_CENTER, image_padding_x, image_padding_y);
 
   // lv_obj_t *text = lv_label_create(scr);
   // lv_label_set_text(text, "HELLO E-PAPER");
@@ -194,13 +197,19 @@ int main(void)
   epd3in7_driver_init_1_gray(&epd3in7_drv);
   epd3in7_driver_clear_1_gray(&epd3in7_drv, EPD3IN7_DRIVER_MODE_GC);
 
-  draw_corners();
+  int32_t random_offset_x = 0;
+  int32_t random_offset_y = -20;
 
   while (1)
   {
+    draw_corners(random_offset_x, random_offset_y);
+
+    random_offset_x = (rand() % 161) - 80;
+    random_offset_y = (rand() % 161) - 80;
+
     lv_timer_handler();
 
-    HAL_Delay(100);
+    HAL_Delay(1000);
 
     /* USER CODE END WHILE */
 

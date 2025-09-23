@@ -33,9 +33,12 @@ extern "C"
      */
     typedef struct
     {
-        epd3in7_driver_handle *driver;                    /**< Pointer to the e-Paper driver handle */
-        uint8_t *work_buffer;                             /**< Pointer to the work buffer for image processing */
-        epd3in7_lvgl_adapter_sector_list current_sectors; /**< Currently rendered, active sectors (for change detection) */
+        epd3in7_driver_handle *driver;                     /**< Pointer to the e-Paper driver handle */
+        uint8_t *work_buffer;                              /**< Pointer to the work buffer for image processing */
+        epd3in7_lvgl_adapter_sector_list current_sectors;  /**< Currently rendered, active sectors (for change detection) */
+        epd3in7_lvgl_adapter_sector_list previous_sectors; /**< Previously rendered sectors (for change detection) */
+        uint8_t refresh_counter;                           /**< Counter for refresh cycles (0-9, resets to 0 after GC) */
+        bool is_initialized;                               /**< Flag indicating if display has been initialized */
     } epd3in7_lvgl_adapter_handle;
 
     /**

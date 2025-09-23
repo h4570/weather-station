@@ -44,7 +44,7 @@ static void epd3in7_lvgl_adapter_rotate(const void *src, void *dst, int32_t src_
     // Clear the destination buffer — we will only set bits to 1.
     // (The 0/1 values keep the palette meaning; we are just moving bits.)
     // Note: For 0/180, destination size = src_w x src_h; for 90/270 = src_h x src_w.
-    int dst_w = (rotation == LV_DISPLAY_ROTATION_90 || rotation == LV_DISPLAY_ROTATION_270) ? src_h : src_w;
+    // int dst_w = (rotation == LV_DISPLAY_ROTATION_90 || rotation == LV_DISPLAY_ROTATION_270) ? src_h : src_w;
     int dst_h = (rotation == LV_DISPLAY_ROTATION_90 || rotation == LV_DISPLAY_ROTATION_270) ? src_w : src_h;
     memset(dst, 0x00, (size_t)dst_stride * (size_t)dst_h);
 
@@ -169,6 +169,29 @@ static void epd3in7_lvgl_adapter_sector_list_free(epd3in7_lvgl_adapter_sector_li
     list->count = 0;
 }
 
+/**
+ * @brief Check if any sectors have changed between current and previous
+ * @param current Current sector list
+ * @param previous Previous sector list
+ * @return true if changes detected, false if no changes or lists incompatible
+ */
+static bool epd3in7_lvgl_adapter_has_changes(const epd3in7_lvgl_adapter_sector_list *current,
+                                             const epd3in7_lvgl_adapter_sector_list *previous)
+{
+    if (!current || !previous || current->count != previous->count)
+        return true; // Structure changed, consider as changed
+
+    for (uint16_t i = 0; i < current->count; ++i)
+    {
+        if (current->items[i].hash != previous->items[i].hash)
+        {
+            return true; // Found changed sector
+        }
+    }
+
+    return false; // No changes found
+}
+
 epd3in7_lvgl_adapter_handle epd3in7_lvgl_adapter_create(epd3in7_driver_handle *driver, uint8_t *work_buffer)
 {
     epd3in7_lvgl_adapter_handle handle;
@@ -176,6 +199,10 @@ epd3in7_lvgl_adapter_handle epd3in7_lvgl_adapter_create(epd3in7_driver_handle *d
     handle.work_buffer = work_buffer;
     handle.current_sectors.items = NULL;
     handle.current_sectors.count = 0;
+    handle.previous_sectors.items = NULL;
+    handle.previous_sectors.count = 0;
+    handle.refresh_counter = 0;
+    handle.is_initialized = false;
     return handle;
 }
 
@@ -184,7 +211,15 @@ void epd3in7_lvgl_adapter_free(epd3in7_lvgl_adapter_handle *handle)
     if (!handle)
         return;
 
+    // Put display to sleep before freeing
+    if (handle->is_initialized)
+    {
+        epd3in7_driver_sleep(handle->driver);
+        handle->is_initialized = false;
+    }
+
     epd3in7_lvgl_adapter_sector_list_free(&handle->current_sectors);
+    epd3in7_lvgl_adapter_sector_list_free(&handle->previous_sectors);
 }
 
 void epd3in7_lvgl_adapter_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
@@ -195,6 +230,17 @@ void epd3in7_lvgl_adapter_flush(lv_display_t *disp, const lv_area_t *area, uint8
     {
         lv_display_flush_ready(disp);
         return;
+    }
+
+    // Initialize display on first use
+    if (!h->is_initialized)
+    {
+        if (epd3in7_driver_init_1_gray(h->driver) != EPD3IN7_DRIVER_OK)
+        {
+            lv_display_flush_ready(disp);
+            return;
+        }
+        h->is_initialized = true;
     }
 
     // I1: 2 colors * 4 bytes (ARGB32)
@@ -226,24 +272,61 @@ void epd3in7_lvgl_adapter_flush(lv_display_t *disp, const lv_area_t *area, uint8
         src = h->work_buffer;
     }
 
-    { // Change detection
+    // Move previous sectors to make room for new current sectors
+    epd3in7_lvgl_adapter_sector_list_free(&h->previous_sectors);
+    h->previous_sectors = h->current_sectors;
+    h->current_sectors.items = NULL;
+    h->current_sectors.count = 0;
+
+    { // Change detection and sector creation
         lv_color_format_t cf = lv_display_get_color_format(disp);
         uint32_t stride = lv_draw_buf_width_to_stride(lv_area_get_width(area), cf);
 
-        if (h->current_sectors.items != NULL)
+        if (!epd3in7_lvgl_adapter_make_sectors_rows(area, src, stride, EPD3IN7_LVGL_ADAPTER_CHANGE_DETECTION_ROWS_PER_SECTION, &h->current_sectors))
         {
-            // Free previous sectors
-            epd3in7_lvgl_adapter_sector_list_free(&h->current_sectors);
-        }
-
-        if (epd3in7_lvgl_adapter_make_sectors_rows(area, src, stride, EPD3IN7_LVGL_ADAPTER_CHANGE_DETECTION_ROWS_PER_SECTION, &h->current_sectors))
-        {
+            // Fallback to full refresh if sector creation failed
+            epd3in7_driver_display_1_gray(h->driver, src, EPD3IN7_DRIVER_MODE_GC);
+            h->refresh_counter = 0;
+            epd3in7_driver_sleep(h->driver);
+            lv_display_flush_ready(disp);
+            return;
         }
     }
 
-    epd3in7_driver_display_1_gray(h->driver, src, EPD3IN7_DRIVER_MODE_GC);
+    // Determine refresh mode and execute
+    epd3in7_driver_mode mode;
 
-    // epd3in7_driver_display_1_gray_top
+    // Every 10th refresh: full GC refresh
+    if (h->refresh_counter >= 9)
+    {
+        mode = EPD3IN7_DRIVER_MODE_GC;
+        h->refresh_counter = 0;
+    }
+    else
+    {
+        // Check for changes
+        bool has_changes = epd3in7_lvgl_adapter_has_changes(&h->current_sectors, &h->previous_sectors);
+
+        if (has_changes)
+        {
+            // Changes detected - use DU mode
+            mode = EPD3IN7_DRIVER_MODE_DU;
+            h->refresh_counter++;
+        }
+        else
+        {
+            // No changes detected - skip refresh but still put display to sleep
+            epd3in7_driver_sleep(h->driver);
+            lv_display_flush_ready(disp);
+            return;
+        }
+    }
+
+    // Execute the refresh
+    epd3in7_driver_display_1_gray(h->driver, src, mode);
+
+    // Put display to sleep after refresh to prevent damage
+    epd3in7_driver_sleep(h->driver);
 
     lv_display_flush_ready(disp);
 }
