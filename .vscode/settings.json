@@ -17,6 +17,7 @@
         "array": "c",
         "string": "c",
         "string_view": "c",
-        "lv_drivers.h": "c"
+        "lv_drivers.h": "c",
+        "bitset": "c"
     }
 }

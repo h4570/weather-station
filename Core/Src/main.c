@@ -183,6 +183,7 @@ int main(void)
   lv_display_set_driver_data(display, &epd3in7_drv);
   lv_display_set_buffers(display, lvgl_buffer, NULL, sizeof(lvgl_buffer), LV_DISPLAY_RENDER_MODE_FULL);
   lv_display_set_flush_cb(display, epd3in7_lvgl_adapter_flush);
+  lv_display_set_rotation(display, LV_DISPLAY_ROTATION_90);
 
   epd3in7_driver_init_1_gray(&epd3in7_drv);
   epd3in7_driver_clear_1_gray(&epd3in7_drv, EPD3IN7_DRIVER_MODE_GC);
