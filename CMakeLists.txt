@@ -37,6 +37,16 @@ add_executable(${CMAKE_PROJECT_NAME})
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
 
+# !!! LV_CONF_PATH and LV_BUILD_CONF_PATH is set in `cmake/gcc-arm-none-eabi.cmake`
+
+set(CONFIG_LV_BUILD_DEMOS OFF)
+set(CONFIG_LV_BUILD_EXAMPLES OFF)
+set(CONFIG_LV_USE_THORVG_INTERNAL OFF)
+
+# Dodaj podprojekt LVGL (katalog 'lvgl' w repo)
+# To zbuduje target biblioteczny 'lvgl'
+add_subdirectory(${CMAKE_SOURCE_DIR}/3rdParty/mirrors/lvgl)
+
 # Link directories setup
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined library search paths
@@ -46,11 +56,12 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     Core/Src/epd3in7_driver.c
-    Core/Src/epd3in7_panel.c
+    Core/Src/epd3in7_lvgl_adapter.c
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
+    ${CMAKE_SOURCE_DIR}/3rdParty/inc
     # Add user defined include paths
 )
 
@@ -65,6 +76,10 @@ list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)
 # Add linked libraries
 target_link_libraries(${CMAKE_PROJECT_NAME}
     stm32cubemx
-
+    lvgl
     # Add user defined libraries
 )
+
+# LVGL FLASH/RAM optimization
+target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -ffunction-sections -fdata-sections)
+target_link_options(${CMAKE_PROJECT_NAME} PRIVATE -Wl,--gc-sections)

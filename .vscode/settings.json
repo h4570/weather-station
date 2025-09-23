@@ -10,6 +10,13 @@
         "stdio.h": "c",
         "epdmgr.h": "c",
         "epd3in7_driver.h": "c",
-        "epd3in7_panel.h": "c"
+        "epd3in7_panel.h": "c",
+        "epd3in7_lvgl_adapter.h": "c",
+        "lvgl.h": "c",
+        "stddef.h": "c",
+        "array": "c",
+        "string": "c",
+        "string_view": "c",
+        "lv_drivers.h": "c"
     }
 }

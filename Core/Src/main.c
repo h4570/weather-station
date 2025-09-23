@@ -25,7 +25,9 @@
 /* USER CODE BEGIN Includes */
 
 #include "epd3in7_driver.h"
-#include "epd3in7_panel.h"
+#include "epd3in7_lvgl_adapter.h"
+#include "lvgl/lvgl.h"
+#include "hasto_logo.h"
 
 /* USER CODE END Includes */
 
@@ -51,75 +53,50 @@ COM_InitTypeDef BspCOMInit;
 /* USER CODE BEGIN PV */
 
 // Buffer for the full black/white image (1bpp)
-static uint8_t frame_bw[(EPD3IN7_WIDTH * EPD3IN7_HEIGHT) / 8];
+#define STRIDE_BYTES ((EPD3IN7_WIDTH + 7) / 8)
+#define PALETTE_BYTES 8 // I1: 2 colors * 4 bytes (ARGB32)
+static LV_ATTRIBUTE_MEM_ALIGN uint8_t lvgl_buffer[PALETTE_BYTES + STRIDE_BYTES * EPD3IN7_HEIGHT];
 
-// Rectangle parameters
-#define RECT_W 80
-#define RECT_H 80
-#define RECT_X ((EPD3IN7_WIDTH - RECT_W) / 2)
-#define RECT_Y ((EPD3IN7_HEIGHT - RECT_H) / 2)
-#define STRIP_H (RECT_Y + RECT_H) // We are sending 0..(RECT_Y + RECT_H - 1)
-
-static uint8_t strip_buf[(EPD3IN7_WIDTH * STRIP_H) / 8];
-
-// Helper: bytes per row in the full image
-static inline uint16_t bytes_per_row(void) { return (EPD3IN7_WIDTH / 8); }
-
-// Helper: bytes for given number of rows
-static inline uint16_t rows_to_bytes(uint16_t rows) { return rows * bytes_per_row(); }
-
-// Copy from the shadow buffer to the strip buffer
-static void strip_copy_from_shadow(uint8_t *dst_strip, const uint8_t *shadow, uint16_t rows)
+static void draw_corners(void)
 {
-  memcpy(dst_strip, shadow, rows_to_bytes(rows));
-}
+  lv_obj_t *scr = lv_screen_active();
+  const int pad = 6;
 
-// Copy back the TOP strip to the shadow buffer
-static void strip_copy_to_shadow(uint8_t *shadow, const uint8_t *src_strip, uint16_t rows)
-{
-  memcpy(shadow, src_strip, rows_to_bytes(rows));
-}
+  // White background
+  lv_obj_set_style_bg_color(scr, lv_color_white(), 0);
+  lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
 
-// Draw a filled square (black/white) on the strip buffer
-static void draw_filled_square_on_strip(uint8_t *strip, uint8_t is_black)
-{
-  for (uint16_t y = 0; y < RECT_H; y++)
-  {
-    uint16_t gy = RECT_Y + y;
-    uint16_t row_base = gy * bytes_per_row();
-    for (uint16_t x = 0; x < RECT_W; x++)
-    {
-      uint16_t gx = RECT_X + x;
-      uint16_t idx = row_base + (gx >> 3);
-      uint8_t mask = (0x80 >> (gx & 7));
-      if (is_black)
-      {
-        strip[idx] &= ~mask; // black (bit=0)
-      }
-      else
-      {
-        strip[idx] |= mask; // white (bit=1)
-      }
-    }
-  }
-}
+  lv_obj_t *tl = lv_label_create(scr);
+  lv_label_set_text(tl, "TL");
+  lv_obj_set_style_text_color(tl, lv_color_black(), 0);
+  lv_obj_align(tl, LV_ALIGN_TOP_LEFT, pad, pad);
 
-// Draw a checkerboard pattern on the full shadow buffer
-static void draw_checker_full()
-{
-  memset(frame_bw, 0xFF, sizeof(frame_bw)); // start with all white
+  lv_obj_t *tr = lv_label_create(scr);
+  lv_label_set_text(tr, "TR");
+  lv_obj_set_style_text_color(tr, lv_color_black(), 0);
+  lv_obj_align(tr, LV_ALIGN_TOP_RIGHT, -pad, pad);
 
-  for (uint16_t y = 0; y < EPD3IN7_HEIGHT; y++)
-  {
-    for (uint16_t x = 0; x < EPD3IN7_WIDTH; x++)
-    {
-      if (((x >> 4) ^ (y >> 4)) & 1)
-      {
-        uint16_t idx = (y * (EPD3IN7_WIDTH / 8)) + (x >> 3);
-        frame_bw[idx] &= ~(0x80 >> (x & 7));
-      }
-    }
-  }
+  lv_obj_t *bl = lv_label_create(scr);
+  lv_label_set_text(bl, "BL");
+  lv_obj_set_style_text_color(bl, lv_color_black(), 0);
+  lv_obj_align(bl, LV_ALIGN_BOTTOM_LEFT, pad, -pad);
+
+  lv_obj_t *br = lv_label_create(scr);
+  lv_label_set_text(br, "BR");
+  lv_obj_set_style_text_color(br, lv_color_black(), 0);
+  lv_obj_align(br, LV_ALIGN_BOTTOM_RIGHT, -pad, -pad);
+
+  // https://github.com/lvgl/lvgl/blob/master/scripts/LVGLImage.py
+  // python .\LVGLImage.py --cf I1 --ofmt C .\hasto_logo.png
+  lv_obj_t *img = lv_img_create(scr);
+  lv_img_set_src(img, &hasto_logo);
+  lv_obj_center(img);
+  lv_obj_align(img, LV_ALIGN_CENTER, 0, -20);
+
+  // lv_obj_t *text = lv_label_create(scr);
+  // lv_label_set_text(text, "HELLO E-PAPER");
+  // lv_obj_set_style_text_color(text, lv_color_black(), 0);
+  // lv_obj_align(text, LV_ALIGN_CENTER, 0, 20);
 }
 
 /* USER CODE END PV */
@@ -200,55 +177,23 @@ int main(void)
                                                                 .cs_pin = DISP_CS_Pin},
                                                             &hspi2, true);
 
-  epd3in7_panel_handle epd3in7_panel = epd3in7_panel_init(&epd3in7_drv);
+  lv_init();
+  lv_tick_set_cb(HAL_GetTick);
+  lv_display_t *display = lv_display_create(EPD3IN7_WIDTH, EPD3IN7_HEIGHT);
+  lv_display_set_driver_data(display, &epd3in7_drv);
+  lv_display_set_buffers(display, lvgl_buffer, NULL, sizeof(lvgl_buffer), LV_DISPLAY_RENDER_MODE_FULL);
+  lv_display_set_flush_cb(display, epd3in7_lvgl_adapter_flush);
 
   epd3in7_driver_init_1_gray(&epd3in7_drv);
   epd3in7_driver_clear_1_gray(&epd3in7_drv, EPD3IN7_DRIVER_MODE_GC);
 
-  uint8_t black = 1;              // starting with black square
-  uint8_t partial_since_full = 0; // count partial updates since last full refresh
-  uint8_t toggles = 0;            // total square color toggles
-
-  // One-time "top full" push so partials won't blank the rest
-  draw_checker_full();
-  epd3in7_driver_display_1_gray(&epd3in7_drv, frame_bw, EPD3IN7_DRIVER_MODE_GC); // GC
-  epd3in7_driver_display_1_gray(&epd3in7_drv, frame_bw, EPD3IN7_DRIVER_MODE_DU); // DU
+  draw_corners();
 
   while (1)
   {
-    // 1) Base of the partial = current screen content (shadow buffer)
-    strip_copy_from_shadow(strip_buf, frame_bw, STRIP_H);
+    lv_timer_handler();
 
-    // 2) Draw the new filled square (black/white) on the strip
-    draw_filled_square_on_strip(strip_buf, black);
-
-    // 3) Send the partial update (top stripe only)
-    epd3in7_driver_display_1_gray_top(&epd3in7_drv, strip_buf, STRIP_H, EPD3IN7_DRIVER_LUT_1_GRAY_A2);
-
-    // 4) Update shadow buffer so the next partial starts from the latest image
-    strip_copy_to_shadow(frame_bw, strip_buf, STRIP_H);
-
-    // 5) Toggle color for the next iteration
-    black ^= 1;
-    toggles++;
-    partial_since_full++;
-
-    // 6) Every 5 partials, do a single full refresh to mitigate ghosting
-    if (partial_since_full >= 5)
-    {
-      // Full-screen refresh with the current shadow buffer
-      epd3in7_driver_display_1_gray(&epd3in7_drv, frame_bw, EPD3IN7_DRIVER_MODE_GC);
-      partial_since_full = 0;
-    }
-
-    // 7) After 20 toggles, put the panel to sleep and stop using it
-    if (toggles >= 20)
-    {
-      epd3in7_driver_sleep(&epd3in7_drv);
-      break; // exit the loop; do not touch the panel anymore
-    }
-
-    HAL_Delay(500);
+    HAL_Delay(100);
 
     /* USER CODE END WHILE */
 
