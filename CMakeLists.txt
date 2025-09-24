@@ -57,6 +57,11 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     Core/Src/epd3in7_driver.c
     Core/Src/epd3in7_lvgl_adapter.c
+    Core/Src/lv_font_opensans_thin_14.c
+    Core/Src/lv_font_opensans_regular_16.c
+    Core/Src/lv_font_opensans_regular_24.c
+    Core/Src/lv_font_opensans_bold_numbers_72.c
+    Core/Src/renderer.c
     Core/Src/bmpxx80.c
 )
 
@@ -84,3 +89,6 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 # LVGL FLASH/RAM optimization
 target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -ffunction-sections -fdata-sections)
 target_link_options(${CMAKE_PROJECT_NAME} PRIVATE -Wl,--gc-sections)
+
+# float in printf/snprintf
+target_link_options(${CMAKE_PROJECT_NAME} PRIVATE -u _printf_float)

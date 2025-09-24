@@ -33,6 +33,9 @@
         "gpio.h": "c",
         "bmpxx80.h": "c",
         "stdlib.h": "c",
-        "math.h": "c"
+        "math.h": "c",
+        "lv_font_lora_20.h": "c",
+        "functional": "cpp",
+        "renderer.h": "c"
     }
 }

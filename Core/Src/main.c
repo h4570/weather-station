@@ -28,7 +28,7 @@
 #include "epd3in7_driver.h"
 #include "epd3in7_lvgl_adapter.h"
 #include "lvgl/lvgl.h"
-#include "hasto_logo.h"
+#include "renderer.h"
 #include "bmpxx80.h"
 #include <stdlib.h> /* rand */
 
@@ -63,51 +63,6 @@ COM_InitTypeDef BspCOMInit;
 
 static LV_ATTRIBUTE_MEM_ALIGN uint8_t lvgl_buffer[LVGL_PALETTE_BYTES + DISPLAY_BUFFER_SIZE];
 static uint8_t epd3in7_adapter_work_buffer[DISPLAY_BUFFER_SIZE];
-
-static void draw_corners(const int32_t image_padding_x, const int32_t image_padding_y)
-{
-  lv_obj_t *scr = lv_screen_active();
-  const int pad = 6;
-
-  // Clear
-  lv_obj_clean(scr);
-
-  // White background
-  lv_obj_set_style_bg_color(scr, lv_color_white(), 0);
-  lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
-
-  lv_obj_t *tl = lv_label_create(scr);
-  lv_label_set_text(tl, "TL");
-  lv_obj_set_style_text_color(tl, lv_color_black(), 0);
-  lv_obj_align(tl, LV_ALIGN_TOP_LEFT, pad, pad);
-
-  lv_obj_t *tr = lv_label_create(scr);
-  lv_label_set_text(tr, "TR");
-  lv_obj_set_style_text_color(tr, lv_color_black(), 0);
-  lv_obj_align(tr, LV_ALIGN_TOP_RIGHT, -pad, pad);
-
-  lv_obj_t *bl = lv_label_create(scr);
-  lv_label_set_text(bl, "BL");
-  lv_obj_set_style_text_color(bl, lv_color_black(), 0);
-  lv_obj_align(bl, LV_ALIGN_BOTTOM_LEFT, pad, -pad);
-
-  lv_obj_t *br = lv_label_create(scr);
-  lv_label_set_text(br, "BR");
-  lv_obj_set_style_text_color(br, lv_color_black(), 0);
-  lv_obj_align(br, LV_ALIGN_BOTTOM_RIGHT, -pad, -pad);
-
-  // https://github.com/lvgl/lvgl/blob/master/scripts/LVGLImage.py
-  // python .\LVGLImage.py --cf I1 --ofmt C .\hasto_logo.png
-  lv_obj_t *img = lv_img_create(scr);
-  lv_img_set_src(img, &hasto_logo);
-  lv_obj_center(img);
-  lv_obj_align(img, LV_ALIGN_CENTER, image_padding_x, image_padding_y);
-
-  // lv_obj_t *text = lv_label_create(scr);
-  // lv_label_set_text(text, "HELLO E-PAPER");
-  // lv_obj_set_style_text_color(text, lv_color_black(), 0);
-  // lv_obj_align(text, LV_ALIGN_CENTER, 0, 20);
-}
 
 /* USER CODE END PV */
 
@@ -204,25 +159,23 @@ int main(void)
   lv_display_set_rotation(display, LV_DISPLAY_ROTATION_90);
 
   HAL_TIM_Base_Start(&htim1);
-  // BMPxx_init(BME280_CS_GPIO_Port, BME280_CS_Pin);
-  // BME280_Init(&hspi2, BME280_TEMPERATURE_16BIT, BME280_PRESSURE_ULTRALOWPOWER, BME280_HUMIDITY_STANDARD, BME280_NORMALMODE);
-  // BME280_SetConfig(BME280_STANDBY_MS_10, BME280_FILTER_OFF);
+  BMPxx_init(BME280_CS_GPIO_Port, BME280_CS_Pin);
+  BME280_Init(&hspi2, BME280_TEMPERATURE_16BIT, BME280_PRESSURE_ULTRALOWPOWER, BME280_HUMIDITY_STANDARD, BME280_NORMALMODE);
+  BME280_SetConfig(BME280_STANDBY_MS_10, BME280_FILTER_OFF);
 
-  int32_t random_offset_x = 0;
-  int32_t random_offset_y = -20;
   float temperature, humidity;
   int32_t pressure;
 
   while (1)
   {
-    draw_corners(random_offset_x, random_offset_y);
+    BME280_ReadTemperatureAndPressureAndHumidity(&temperature, &pressure, &humidity);
 
-    random_offset_x = (rand() % 161) - 80;
-    random_offset_y = (rand() % 161) - 80;
+    renderer_execute(
+        temperature, humidity, pressure, 99, // in
+        0.0f, 0.0f, 1000, 51                 // out (placeholder)
+    );
 
     lv_timer_handler();
-
-    // BME280_ReadTemperatureAndPressureAndHumidity(&temperature, &pressure, &humidity);
 
     HAL_Delay(1000);
 
