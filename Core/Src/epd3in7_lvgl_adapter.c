@@ -36,7 +36,7 @@ static inline void epd3in7_lvgl_adapter_i1_set_bit_msb_first(uint8_t *row, int x
         row[x >> 3] &= (uint8_t)~mask;
 }
 
-static void epd3in7_lvgl_adapter_rotate(const void *src, void *dst, int32_t src_w, int32_t src_h, int32_t src_stride,
+static void epd3in7_lvgl_adapter_rotate(const uint8_t *src, uint8_t *dst, int32_t src_w, int32_t src_h, int32_t src_stride,
                                         int32_t dst_stride, lv_display_rotation_t rotation)
 {
     // Clear the destination buffer — we will only set bits to 1.
@@ -199,7 +199,7 @@ epd3in7_lvgl_adapter_handle epd3in7_lvgl_adapter_create(epd3in7_driver_handle *d
     handle.current_sectors.count = 0;
     handle.previous_sectors.items = NULL;
     handle.previous_sectors.count = 0;
-    handle.refresh_counter = 0;
+    handle.refresh_counter = 99; // Force GC on first use
     handle.is_initialized = false;
     handle.refresh_cycles_before_gc = refresh_cycles_before_gc;
     handle.default_mode = default_mode;

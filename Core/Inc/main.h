@@ -86,6 +86,8 @@ void Error_Handler(void);
 #define T_SWCLK_GPIO_Port GPIOA
 #define T_SWO_Pin GPIO_PIN_3
 #define T_SWO_GPIO_Port GPIOB
+#define BME280_CS_Pin GPIO_PIN_5
+#define BME280_CS_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 

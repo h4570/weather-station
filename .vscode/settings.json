@@ -26,6 +26,13 @@
         "unordered_map": "c",
         "vector": "c",
         "iterator": "c",
-        "regex": "c"
+        "regex": "c",
+        "cstdint": "cpp",
+        "compare": "c",
+        "hasto_logo.h": "c",
+        "gpio.h": "c",
+        "bmpxx80.h": "c",
+        "stdlib.h": "c",
+        "math.h": "c"
     }
 }

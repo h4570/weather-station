@@ -19,6 +19,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "spi.h"
+#include "tim.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -28,6 +29,8 @@
 #include "epd3in7_lvgl_adapter.h"
 #include "lvgl/lvgl.h"
 #include "hasto_logo.h"
+#include "bmpxx80.h"
+#include <stdlib.h> /* rand */
 
 /* USER CODE END Includes */
 
@@ -149,6 +152,7 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_SPI2_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -199,11 +203,15 @@ int main(void)
   lv_display_set_flush_cb(display, epd3in7_lvgl_adapter_flush);
   lv_display_set_rotation(display, LV_DISPLAY_ROTATION_90);
 
-  epd3in7_driver_init_1_gray(&epd3in7_drv);
-  epd3in7_driver_clear_1_gray(&epd3in7_drv, EPD3IN7_DRIVER_MODE_GC);
+  HAL_TIM_Base_Start(&htim1);
+  // BMPxx_init(BME280_CS_GPIO_Port, BME280_CS_Pin);
+  // BME280_Init(&hspi2, BME280_TEMPERATURE_16BIT, BME280_PRESSURE_ULTRALOWPOWER, BME280_HUMIDITY_STANDARD, BME280_NORMALMODE);
+  // BME280_SetConfig(BME280_STANDBY_MS_10, BME280_FILTER_OFF);
 
   int32_t random_offset_x = 0;
   int32_t random_offset_y = -20;
+  float temperature, humidity;
+  int32_t pressure;
 
   while (1)
   {
@@ -213,6 +221,8 @@ int main(void)
     random_offset_y = (rand() % 161) - 80;
 
     lv_timer_handler();
+
+    // BME280_ReadTemperatureAndPressureAndHumidity(&temperature, &pressure, &humidity);
 
     HAL_Delay(1000);
 

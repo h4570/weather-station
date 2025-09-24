@@ -19,7 +19,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Set the project name
-set(CMAKE_PROJECT_NAME nucleo-epaper-display)
+set(CMAKE_PROJECT_NAME weather-station)
 
 # Enable compile command to ease indexing with e.g. clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
@@ -57,6 +57,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     Core/Src/epd3in7_driver.c
     Core/Src/epd3in7_lvgl_adapter.c
+    Core/Src/bmpxx80.c
 )
 
 # Add include paths
