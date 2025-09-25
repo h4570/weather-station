@@ -36,6 +36,7 @@
         "math.h": "c",
         "lv_font_lora_20.h": "c",
         "functional": "cpp",
-        "renderer.h": "c"
+        "renderer.h": "c",
+        "bat_nimh_calc.h": "c"
     }
 }

@@ -63,6 +63,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/lv_font_opensans_bold_numbers_72.c
     Core/Src/renderer.c
     Core/Src/bmpxx80.c
+    Core/Src/bat_nimh_calc.c
 )
 
 # Add include paths

@@ -109,16 +109,6 @@ static const uint8_t epd3in7_driver_lut_1_gray_a2[] =
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 10
         0x22, 0x22, 0x22, 0x22, 0x22};
 
-static void epd3in7_driver_reset(const epd3in7_driver_handle *handle)
-{
-    HAL_GPIO_WritePin(handle->pins.reset_port, handle->pins.reset_pin, GPIO_PIN_SET);
-    HAL_Delay(300);
-    HAL_GPIO_WritePin(handle->pins.reset_port, handle->pins.reset_pin, GPIO_PIN_RESET);
-    HAL_Delay(3);
-    HAL_GPIO_WritePin(handle->pins.reset_port, handle->pins.reset_pin, GPIO_PIN_SET);
-    HAL_Delay(300);
-}
-
 static void epd3in7_driver_send_begin(epd3in7_driver_handle *handle)
 {
     HAL_GPIO_WritePin(handle->pins.cs_port, handle->pins.cs_pin, GPIO_PIN_RESET);
@@ -297,20 +287,43 @@ epd3in7_driver_status epd3in7_driver_busy_wait_for_idle(const epd3in7_driver_han
     return EPD3IN7_DRIVER_OK;
 }
 
-epd3in7_driver_status epd3in7_driver_sleep(epd3in7_driver_handle *handle)
+epd3in7_driver_status epd3in7_driver_sleep(epd3in7_driver_handle *handle, const epd3in7_driver_sleep_mode mode)
 {
     epd3in7_driver_status err = EPD3IN7_DRIVER_OK;
 
-    epd3in7_driver_send_begin(handle);
-    EPD3IN7_DRIVER_TRY(epd3in7_driver_send_command(handle, EPD_CMD_DEEP_SLEEP)); // deep sleep
-    EPD3IN7_DRIVER_TRY(epd3in7_driver_send_data(handle, 0x03));
-    epd3in7_driver_send_end(handle);
+    if (mode == EPD3IN7_DRIVER_SLEEP_DEEP)
+    {
+        epd3in7_driver_send_begin(handle);
+        EPD3IN7_DRIVER_TRY(epd3in7_driver_send_command(handle, EPD3IN7_DRIVER_SLEEP_DEEP));
+        EPD3IN7_DRIVER_TRY(epd3in7_driver_send_data(handle, 0x03));
+        epd3in7_driver_send_end(handle);
+    }
+    else
+    {
+        epd3in7_driver_send_begin(handle);
+        EPD3IN7_DRIVER_TRY(epd3in7_driver_send_command(handle, EPD_CMD_SLEEP));
+        EPD3IN7_DRIVER_TRY(epd3in7_driver_send_data(handle, 0xF7));
+        EPD3IN7_DRIVER_TRY(epd3in7_driver_send_command(handle, EPD_CMD_POWEROFF));
+        EPD3IN7_DRIVER_TRY(epd3in7_driver_send_command(handle, EPD_CMD_SLEEP2));
+        EPD3IN7_DRIVER_TRY(epd3in7_driver_send_data(handle, 0xA5));
+        epd3in7_driver_send_end(handle);
+    }
 
     return EPD3IN7_DRIVER_OK;
 
 fail:
     epd3in7_driver_send_end(handle);
     return err;
+}
+
+void epd3in7_driver_reset(const epd3in7_driver_handle *handle)
+{
+    HAL_GPIO_WritePin(handle->pins.reset_port, handle->pins.reset_pin, GPIO_PIN_SET);
+    HAL_Delay(300);
+    HAL_GPIO_WritePin(handle->pins.reset_port, handle->pins.reset_pin, GPIO_PIN_RESET);
+    HAL_Delay(3);
+    HAL_GPIO_WritePin(handle->pins.reset_port, handle->pins.reset_pin, GPIO_PIN_SET);
+    HAL_Delay(300);
 }
 
 epd3in7_driver_status epd3in7_driver_init_4_gray(epd3in7_driver_handle *handle)
@@ -419,9 +432,9 @@ epd3in7_driver_status epd3in7_driver_init_1_gray(epd3in7_driver_handle *handle)
 {
     epd3in7_driver_status err = EPD3IN7_DRIVER_OK;
 
-    EPD3IN7_DRIVER_TRY(epd3in7_driver_busy_wait_for_idle(handle));
-
     epd3in7_driver_reset(handle);
+
+    EPD3IN7_DRIVER_TRY(epd3in7_driver_busy_wait_for_idle(handle));
 
     epd3in7_driver_send_begin(handle);
 

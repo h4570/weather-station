@@ -20,7 +20,7 @@ static void renderer_draw_div_v(lv_obj_t *parent, lv_coord_t x, lv_coord_t y, lv
     lv_obj_set_pos(line, x, y);
 }
 
-static void renderer_draw_battery(lv_obj_t *parent, lv_coord_t x, lv_coord_t y, int level, const char *label)
+static void renderer_draw_battery(lv_obj_t *parent, lv_coord_t x, lv_coord_t y, int level)
 {
     int lv = level;
     if (lv < 0)
@@ -64,10 +64,10 @@ static void renderer_draw_battery(lv_obj_t *parent, lv_coord_t x, lv_coord_t y, 
     }
 
     lv_obj_t *lbl = lv_label_create(parent);
-    lv_label_set_text_fmt(lbl, "%s %d%%", label, lv);
+    lv_label_set_text_fmt(lbl, "%d%%", lv);
     lv_obj_set_style_text_font(lbl, &lv_font_opensans_thin_14, 0);
     lv_obj_set_style_text_color(lbl, lv_color_black(), 0);
-    lv_obj_set_pos(lbl, x + w_start + 40, y + (24 - lv_font_get_line_height(&lv_font_opensans_thin_14)) / 2);
+    lv_obj_set_pos(lbl, x + w_start + 12, y + (24 - lv_font_get_line_height(&lv_font_opensans_thin_14)) / 2);
 }
 
 static void renderer_draw_humidity_row(lv_obj_t *parent,
@@ -155,9 +155,10 @@ void renderer_execute(
     lv_label_set_text(title, "STACJA POGODOWA");
     lv_obj_set_pos(title, 8, 8);
 
+    // Warto kiedyś wykorzystać w lepszym celu
     lv_obj_t *res = lv_label_create(scr);
     lv_obj_set_style_text_font(res, &lv_font_opensans_thin_14, 0);
-    lv_label_set_text(res, "Poniedziałek, 2024-01-01 12:00");
+    lv_label_set_text(res, "Kwidzyn, Polska");
     lv_coord_t res_w = lv_obj_get_self_width(res);
     lv_obj_set_pos(res, 480 - res_w - 8, 9);
 
@@ -198,7 +199,7 @@ void renderer_execute(
 
     renderer_draw_div_h(scr, 230);
 
-    renderer_draw_battery(scr, 12, 280 - 40, batt_in, "BATERIA");
+    renderer_draw_battery(scr, 12, 280 - 40, batt_in);
     renderer_draw_div_v(scr, 240, 280 - 48, 48);
-    renderer_draw_battery(scr, 240 + 12, 280 - 40, batt_out, "BATERIA");
+    renderer_draw_battery(scr, 240 + 12, 280 - 40, batt_out);
 }

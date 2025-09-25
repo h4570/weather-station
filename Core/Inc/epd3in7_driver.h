@@ -54,6 +54,15 @@ extern "C"
     } epd3in7_driver_lut_type;
 
     /**
+     * @brief Sleep modes
+     */
+    typedef enum
+    {
+        EPD3IN7_DRIVER_SLEEP_DEEP = 0,  /**< Deep sleep mode, lowest power consumption (about 5µA). Data is lost and a full reset is needed. */
+        EPD3IN7_DRIVER_SLEEP_NORMAL = 1 /**< Normal sleep mode, higher power consumption (about 20µA). Data is retained and no reset is needed. */
+    } epd3in7_driver_sleep_mode;
+
+    /**
      * @brief Status codes
      */
     typedef enum
@@ -126,8 +135,16 @@ extern "C"
      * When the display is not being refreshed, always put it into sleep mode or power it off.
      * Otherwise, the display will remain in a high voltage state for a long time,
      * which will permanently damage the e-Paper and cannot be repaired!
+     * Note, You should only hardware reset or use initialize function to wake up e-Paper from sleep mode.
      */
-    epd3in7_driver_status epd3in7_driver_sleep(epd3in7_driver_handle *handle);
+    epd3in7_driver_status epd3in7_driver_sleep(epd3in7_driver_handle *handle, const epd3in7_driver_sleep_mode mode);
+
+    /**
+     * @brief Perform a hardware reset of the e-Paper display
+     *
+     * @param handle Pointer to the e-Paper display handle
+     */
+    void epd3in7_driver_reset(const epd3in7_driver_handle *handle);
 
     /* ---- 4-Gray Level Functions ---- */
 

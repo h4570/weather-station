@@ -39,6 +39,7 @@ extern "C"
         epd3in7_lvgl_adapter_sector_list previous_sectors; /**< Previously rendered sectors (for change detection) */
         uint8_t refresh_counter;                           /**< Counter for refresh cycles (0-9, resets to 0 after GC) */
         bool is_initialized;                               /**< Flag indicating if display has been initialized */
+        bool is_sleeping;                                  /**< Flag indicating if display is in sleep mode */
         int8_t refresh_cycles_before_gc;                   /**< Number of refresh cycles before forcing a GC refresh */
         epd3in7_driver_mode default_mode;                  /**< DU or A2 */
         int8_t change_detection_rows_per_section;          /**< Number of rows per section for change detection */

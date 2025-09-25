@@ -201,6 +201,7 @@ epd3in7_lvgl_adapter_handle epd3in7_lvgl_adapter_create(epd3in7_driver_handle *d
     handle.previous_sectors.count = 0;
     handle.refresh_counter = 99; // Force GC on first use
     handle.is_initialized = false;
+    handle.is_sleeping = false;
     handle.refresh_cycles_before_gc = refresh_cycles_before_gc;
     handle.default_mode = default_mode;
     handle.change_detection_rows_per_section = change_detection_rows_per_section;
@@ -215,7 +216,8 @@ void epd3in7_lvgl_adapter_free(epd3in7_lvgl_adapter_handle *handle)
     // Put display to sleep before freeing
     if (handle->is_initialized)
     {
-        epd3in7_driver_sleep(handle->driver);
+        epd3in7_driver_sleep(handle->driver, EPD3IN7_DRIVER_SLEEP_NORMAL);
+        handle->is_sleeping = true;
         handle->is_initialized = false;
     }
 
@@ -241,6 +243,8 @@ void epd3in7_lvgl_adapter_flush(lv_display_t *disp, const lv_area_t *area, uint8
             lv_display_flush_ready(disp);
             return;
         }
+
+        h->refresh_counter = 99; // Force GC on first use
         h->is_initialized = true;
     }
 
@@ -286,9 +290,21 @@ void epd3in7_lvgl_adapter_flush(lv_display_t *disp, const lv_area_t *area, uint8
         if (!epd3in7_lvgl_adapter_make_sectors_rows(area, src, stride, h->change_detection_rows_per_section, &h->current_sectors))
         {
             // Fallback to full refresh if sector creation failed
-            epd3in7_driver_display_1_gray(h->driver, src, EPD3IN7_DRIVER_MODE_GC);
+            if (epd3in7_driver_display_1_gray(h->driver, src, EPD3IN7_DRIVER_MODE_GC) != EPD3IN7_DRIVER_OK)
+            {
+                h->is_initialized = false;
+            }
+
+            h->is_sleeping = false;
             h->refresh_counter = 0;
-            epd3in7_driver_sleep(h->driver);
+
+            if (epd3in7_driver_sleep(h->driver, EPD3IN7_DRIVER_SLEEP_NORMAL) != EPD3IN7_DRIVER_OK)
+            {
+                h->is_initialized = false;
+            }
+
+            h->is_sleeping = true;
+
             lv_display_flush_ready(disp);
             return;
         }
@@ -317,17 +333,37 @@ void epd3in7_lvgl_adapter_flush(lv_display_t *disp, const lv_area_t *area, uint8
         else
         {
             // No changes detected - skip refresh but still put display to sleep
-            epd3in7_driver_sleep(h->driver);
+            if (h->is_sleeping == false)
+            {
+                if (epd3in7_driver_sleep(h->driver, EPD3IN7_DRIVER_SLEEP_NORMAL) != EPD3IN7_DRIVER_OK)
+                {
+                    h->is_initialized = false;
+                }
+
+                h->is_sleeping = true;
+            }
+
             lv_display_flush_ready(disp);
+
             return;
         }
     }
 
     // Execute the refresh
-    epd3in7_driver_display_1_gray(h->driver, src, mode);
+    if (epd3in7_driver_display_1_gray(h->driver, src, mode) != EPD3IN7_DRIVER_OK)
+    {
+        h->is_initialized = false;
+    }
+
+    h->is_sleeping = false;
 
     // Put display to sleep after refresh to prevent damage
-    epd3in7_driver_sleep(h->driver);
+    if (epd3in7_driver_sleep(h->driver, EPD3IN7_DRIVER_SLEEP_NORMAL) != EPD3IN7_DRIVER_OK)
+    {
+        h->is_initialized = false;
+    }
+
+    h->is_sleeping = true;
 
     lv_display_flush_ready(disp);
 }

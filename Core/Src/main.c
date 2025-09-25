@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "adc.h"
 #include "spi.h"
 #include "tim.h"
 #include "gpio.h"
@@ -30,6 +31,7 @@
 #include "lvgl/lvgl.h"
 #include "renderer.h"
 #include "bmpxx80.h"
+#include "bat_nimh_calc.h"
 #include <stdlib.h> /* rand */
 
 /* USER CODE END Includes */
@@ -63,6 +65,10 @@ COM_InitTypeDef BspCOMInit;
 
 static LV_ATTRIBUTE_MEM_ALIGN uint8_t lvgl_buffer[LVGL_PALETTE_BYTES + DISPLAY_BUFFER_SIZE];
 static uint8_t epd3in7_adapter_work_buffer[DISPLAY_BUFFER_SIZE];
+
+volatile uint16_t bat_vcc_adc_value, last_bat_vcc_adc_value;
+float last_temperature, last_humidity;
+int32_t last_bat_in, last_pressure;
 
 /* USER CODE END PV */
 
@@ -108,6 +114,7 @@ int main(void)
   MX_GPIO_Init();
   MX_SPI2_Init();
   MX_TIM1_Init();
+  MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -160,24 +167,71 @@ int main(void)
 
   HAL_TIM_Base_Start(&htim1);
   BMPxx_init(BME280_CS_GPIO_Port, BME280_CS_Pin);
-  BME280_Init(&hspi2, BME280_TEMPERATURE_16BIT, BME280_PRESSURE_ULTRALOWPOWER, BME280_HUMIDITY_STANDARD, BME280_NORMALMODE);
+  BME280_Init(&hspi2, BME280_TEMPERATURE_16BIT, BME280_PRESSURE_ULTRALOWPOWER, BME280_HUMIDITY_STANDARD, BME280_FORCEDMODE);
   BME280_SetConfig(BME280_STANDBY_MS_10, BME280_FILTER_OFF);
 
-  float temperature, humidity;
-  int32_t pressure;
+  float temperature = 0, humidity = 0;
+  int32_t pressure = 0, bat_in = 0;
+
+  // Plan:
+  // - Baterię to można testować raz na 10min
+  // - Pomiar temperatury raz na minutę
+  // - Dodać radio do układu i napisać sterownik do odbioru danych
+  // - Dodać usypianie i budzenie co np. 9s
+  // - Przerobić na dwa projekty i wspólny kod między nimi
+  HAL_ADC_Start_IT(&hadc1);
+  BME280_ReadTemperatureAndPressureAndHumidity(&temperature, &pressure, &humidity);
+
+  int seconds_elapsed = 0;
+  bool anything_changed = true;
 
   while (1)
   {
-    BME280_ReadTemperatureAndPressureAndHumidity(&temperature, &pressure, &humidity);
+    if (seconds_elapsed % 10 == 0)
+    {
+      HAL_ADC_Start_IT(&hadc1);
+      BME280_ReadTemperatureAndPressureAndHumidity(&temperature, &pressure, &humidity);
 
-    renderer_execute(
-        temperature, humidity, pressure, 99, // in
-        0.0f, 0.0f, 1000, 51                 // out (placeholder)
-    );
+      if (temperature != last_temperature || humidity != last_humidity || pressure != last_pressure)
+      {
+        last_temperature = temperature;
+        last_humidity = humidity;
+        last_pressure = pressure;
+        anything_changed = true;
+      }
+
+      seconds_elapsed = 0;
+    }
+
+    if (bat_vcc_adc_value != last_bat_vcc_adc_value)
+    {
+      last_bat_vcc_adc_value = bat_vcc_adc_value;
+      // 2x AA battery, voltage divider 100k/100k, ADC 12-bit, Vref = 3.3V
+      float battery_voltage = bat_nimh_calc_get_voltage_for_soc(bat_vcc_adc_value, 3.3F, 2.0F);
+      bat_in = bat_nimh_calc_execute(battery_voltage, temperature);
+
+      if (last_bat_in != bat_in)
+      {
+        anything_changed = true;
+      }
+
+      last_bat_in = bat_in;
+    }
+
+    if (anything_changed)
+    {
+      renderer_execute(
+          temperature, humidity, pressure, bat_in, // in
+          0.0f, 0.0f, 1000, 51                     // out (placeholder)
+      );
+    }
 
     lv_timer_handler();
 
     HAL_Delay(1000);
+
+    seconds_elapsed++;
+    anything_changed = false;
 
     /* USER CODE END WHILE */
 
@@ -232,6 +286,14 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
+{
+  if (hadc->Instance == ADC1)
+  {
+    bat_vcc_adc_value = HAL_ADC_GetValue(hadc);
+  }
+}
 
 /* USER CODE END 4 */
 
