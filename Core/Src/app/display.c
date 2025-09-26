@@ -26,6 +26,8 @@ display_handle display_create()
 {
     display_handle handle = {};
 
+    handle.anything_was_rendered = false;
+
     return handle;
 }
 
@@ -58,13 +60,18 @@ void display_init(display_handle *handle)
     lv_display_set_rotation(display, LV_DISPLAY_ROTATION_90);
 }
 
-void display_loop(display_handle *handle, station_data *local, station_data *remote, const bool anything_changed)
+void display_loop(display_handle *handle, station_data *local, station_data *remote, const bool changes_detected)
 {
-    if (anything_changed)
+    if (!handle->anything_was_rendered || changes_detected)
     {
         renderer_execute(
             local->temperature, local->humidity, local->pressure, local->bat_in,
             0.0f, 0.0f, 1000, 51);
+
+        if (!handle->anything_was_rendered)
+        {
+            handle->anything_was_rendered = true;
+        }
     }
 
     lv_timer_handler();

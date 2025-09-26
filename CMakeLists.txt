@@ -63,10 +63,11 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/app/fonts/lv_font_opensans_regular_24.c
     Core/Src/app/fonts/lv_font_opensans_thin_14.c
     Core/Src/app/app.c
-    Core/Src/app/bat_nimh_calc.c
+    Core/Src/app/battery.c
     Core/Src/app/display.c
     Core/Src/app/hourly_clock.c
     Core/Src/app/renderer.c
+    Core/Src/app/sensor.c
 )
 
 # Add include paths

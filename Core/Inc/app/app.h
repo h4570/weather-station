@@ -4,6 +4,7 @@
 
 #include "app/display.h"
 #include "app/hourly_clock.h"
+#include "app/battery.h"
 
 #include "stm32g4xx_hal.h"
 #include "adc.h"
@@ -24,12 +25,11 @@ extern "C"
     {
         display_handle display;
         hourly_clock_handle hclock;
+        battery_handle battery;
         station_data local, remote, last_local, last_remote;
-        bool anything_changed;
         hourly_clock_timestamp_t last_sensor_read_time;
         hourly_clock_timestamp_t last_battery_read_time;
         hourly_clock_timestamp_t last_check_changes_time;
-        uint16_t last_bat_vcc_adc_value;
     } app_handle;
 
     app_handle app_create();

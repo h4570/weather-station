@@ -44,6 +44,13 @@
         "stm32g4xx_hal_spi.h": "c",
         "stm32g4xx_hal_rtc.h": "c",
         "tim.h": "c",
-        "display.h": "c"
+        "display.h": "c",
+        "sensor.h": "c",
+        "station_data.h": "c",
+        "spi.h": "c",
+        "battery.h": "c",
+        "adc.h": "c",
+        "stdbool.h": "c",
+        "tuple": "c"
     }
 }

@@ -12,6 +12,10 @@
 #ifndef BMPXX80_H_
 #define BMPXX80_H_
 
+#include "stm32g4xx_hal.h"
+#include "gpio.h"
+#include "spi.h"
+
 //
 //	Settings
 //	Choose sensor
