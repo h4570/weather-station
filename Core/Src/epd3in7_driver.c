@@ -126,8 +126,9 @@ static void epd3in7_driver_send_end(epd3in7_driver_handle *handle)
 static epd3in7_driver_status epd3in7_driver_send_command(epd3in7_driver_handle *handle, const epd3in7_driver_cmd reg)
 {
     HAL_GPIO_WritePin(handle->pins.dc_port, handle->pins.dc_pin, GPIO_PIN_RESET);
+    HAL_StatusTypeDef res = HAL_SPI_Transmit(handle->spi_handle, (uint8_t *)&reg, 1, EPD3IN7_DRIVER_SPI_TIMEOUT);
 
-    if (HAL_SPI_Transmit(handle->spi_handle, (uint8_t *)&reg, 1, EPD3IN7_DRIVER_SPI_TIMEOUT) != HAL_OK)
+    if (res != HAL_OK)
     {
         return EPD3IN7_DRIVER_ERR_HAL;
     }
@@ -138,8 +139,9 @@ static epd3in7_driver_status epd3in7_driver_send_command(epd3in7_driver_handle *
 static epd3in7_driver_status epd3in7_driver_send_data(epd3in7_driver_handle *handle, const uint8_t data)
 {
     HAL_GPIO_WritePin(handle->pins.dc_port, handle->pins.dc_pin, GPIO_PIN_SET);
+    HAL_StatusTypeDef res = HAL_SPI_Transmit(handle->spi_handle, &data, 1, EPD3IN7_DRIVER_SPI_TIMEOUT);
 
-    if (HAL_SPI_Transmit(handle->spi_handle, &data, 1, EPD3IN7_DRIVER_SPI_TIMEOUT) != HAL_OK)
+    if (res != HAL_OK)
     {
         return EPD3IN7_DRIVER_ERR_HAL;
     }
@@ -150,8 +152,13 @@ static epd3in7_driver_status epd3in7_driver_send_data(epd3in7_driver_handle *han
 static epd3in7_driver_status epd3in7_driver_send_data_many(const epd3in7_driver_handle *handle, const uint8_t *data, uint32_t len)
 {
     HAL_GPIO_WritePin(handle->pins.dc_port, handle->pins.dc_pin, GPIO_PIN_SET);
-    if (HAL_SPI_Transmit(handle->spi_handle, (uint8_t *)data, len, EPD3IN7_DRIVER_SPI_TIMEOUT) != HAL_OK)
+    HAL_StatusTypeDef res = HAL_SPI_Transmit(handle->spi_handle, (uint8_t *)data, len, EPD3IN7_DRIVER_SPI_TIMEOUT);
+
+    if (res != HAL_OK)
+    {
         return EPD3IN7_DRIVER_ERR_HAL;
+    }
+
     return EPD3IN7_DRIVER_OK;
 }
 

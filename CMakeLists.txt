@@ -64,6 +64,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/renderer.c
     Core/Src/bmpxx80.c
     Core/Src/bat_nimh_calc.c
+    Core/Src/hourly_clock.c
 )
 
 # Add include paths
