@@ -27,13 +27,13 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
-#include "epd3in7_driver.h"
-#include "epd3in7_lvgl_adapter.h"
+#include "app/drivers/epd3in7_driver.h"
+#include "app/drivers/epd3in7_lvgl_adapter.h"
 #include "lvgl/lvgl.h"
-#include "renderer.h"
-#include "bmpxx80.h"
-#include "bat_nimh_calc.h"
-#include "hourly_clock.h"
+#include "app/renderer.h"
+#include "app/drivers/bmpxx80.h"
+#include "app/bat_nimh_calc.h"
+#include "app/hourly_clock.h"
 #include <stdlib.h> /* rand */
 
 /* USER CODE END Includes */

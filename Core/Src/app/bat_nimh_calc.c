@@ -1,4 +1,4 @@
-#include "bat_nimh_calc.h"
+#include "app/bat_nimh_calc.h"
 
 int bat_nimh_calc_execute(float bat_vcc, float temp_c)
 {

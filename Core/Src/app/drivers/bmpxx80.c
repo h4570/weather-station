@@ -11,7 +11,7 @@
 
 #include "stm32g4xx_hal.h"
 #include "gpio.h"
-#include "bmpxx80.h"
+#include "app/drivers/bmpxx80.h"
 #include "tim.h"
 #include "math.h"
 

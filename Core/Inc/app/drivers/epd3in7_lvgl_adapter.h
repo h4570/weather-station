@@ -1,6 +1,6 @@
 #pragma once
 
-#include "epd3in7_driver.h"
+#include "app/drivers/epd3in7_driver.h"
 #include "lvgl/lvgl.h"
 #include <stddef.h>
 

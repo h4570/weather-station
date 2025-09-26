@@ -1,4 +1,4 @@
-#include "epd3in7_lvgl_adapter.h"
+#include "app/drivers/epd3in7_lvgl_adapter.h"
 #include <string.h>
 
 // Simple, fast 32-bit FNV-1a hash for sector data

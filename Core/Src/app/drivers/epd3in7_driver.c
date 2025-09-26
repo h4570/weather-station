@@ -7,7 +7,7 @@
  * | Date          :   2025-09-19
  ******************************************************************************/
 
-#include "epd3in7_driver.h"
+#include "app/drivers/epd3in7_driver.h"
 #include "string.h"
 
 #define EPD3IN7_DRIVER_TRY(expr)           \
