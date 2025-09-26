@@ -43,6 +43,7 @@
         "stdint.h": "c",
         "stm32g4xx_hal_spi.h": "c",
         "stm32g4xx_hal_rtc.h": "c",
-        "tim.h": "c"
+        "tim.h": "c",
+        "display.h": "c"
     }
 }

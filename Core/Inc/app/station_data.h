@@ -13,7 +13,7 @@ extern "C"
         float humidity;
         int32_t pressure;
         int32_t bat_in;
-    } display_data;
+    } station_data;
 
 #ifdef __cplusplus
 }

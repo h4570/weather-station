@@ -1,11 +1,9 @@
 #include "app/hourly_clock.h"
 
-hourly_clock_handle hourly_clock_create(RTC_HandleTypeDef *hrtc, RTC_TimeTypeDef *time, RTC_DateTypeDef *date)
+hourly_clock_handle hourly_clock_create(RTC_HandleTypeDef *hrtc)
 {
     hourly_clock_handle handle = {
         .hrtc = hrtc,
-        .time = time,
-        .date = date,
         .prev_second = 0,
         .prev_minute = 0,
         .prev_hour = 0,
@@ -13,15 +11,15 @@ hourly_clock_handle hourly_clock_create(RTC_HandleTypeDef *hrtc, RTC_TimeTypeDef
         .is_initialized = false};
 
     // Get initial RTC time
-    HAL_RTC_GetTime(hrtc, time, RTC_FORMAT_BIN);
-    HAL_RTC_GetDate(hrtc, date, RTC_FORMAT_BIN); // Must be called after HAL_RTC_GetTime to unlock date register
+    HAL_RTC_GetTime(hrtc, &handle.time, RTC_FORMAT_BIN);
+    HAL_RTC_GetDate(hrtc, &handle.date, RTC_FORMAT_BIN); // Must be called after HAL_RTC_GetTime to unlock date register
 
-    handle.prev_second = time->Seconds;
-    handle.prev_minute = time->Minutes;
-    handle.prev_hour = time->Hours;
+    handle.prev_second = handle.time.Seconds;
+    handle.prev_minute = handle.time.Minutes;
+    handle.prev_hour = handle.time.Hours;
 
     // Initialize elapsed seconds based on current time within the hour
-    handle.elapsed_seconds = time->Seconds + (time->Minutes * 60);
+    handle.elapsed_seconds = handle.time.Seconds + (handle.time.Minutes * 60);
     handle.is_initialized = true;
 
     return handle;
@@ -35,32 +33,32 @@ void hourly_clock_update(hourly_clock_handle *handle)
     }
 
     // Get current RTC time
-    HAL_RTC_GetTime(handle->hrtc, handle->time, RTC_FORMAT_BIN);
-    HAL_RTC_GetDate(handle->hrtc, handle->date, RTC_FORMAT_BIN);
+    HAL_RTC_GetTime(handle->hrtc, &handle->time, RTC_FORMAT_BIN);
+    HAL_RTC_GetDate(handle->hrtc, &handle->date, RTC_FORMAT_BIN);
 
     // Check if we're in a new second
-    if (handle->time->Seconds != handle->prev_second ||
-        handle->time->Minutes != handle->prev_minute ||
-        handle->time->Hours != handle->prev_hour)
+    if (handle->time.Seconds != handle->prev_second ||
+        handle->time.Minutes != handle->prev_minute ||
+        handle->time.Hours != handle->prev_hour)
     {
 
         // Hour change detection
-        if (handle->time->Hours != handle->prev_hour)
+        if (handle->time.Hours != handle->prev_hour)
         {
             // Reset counter at hour change
             handle->elapsed_seconds = 0;
             // Add the seconds and minutes of the new hour
-            handle->elapsed_seconds = handle->time->Seconds + (handle->time->Minutes * 60);
+            handle->elapsed_seconds = handle->time.Seconds + (handle->time.Minutes * 60);
         }
         else
         {
             // Minute change detection
-            if (handle->time->Minutes != handle->prev_minute)
+            if (handle->time.Minutes != handle->prev_minute)
             {
                 // Seconds from new minute, reset seconds portion
                 handle->elapsed_seconds = (handle->elapsed_seconds / 60) * 60;
                 // Add the seconds of the new minute
-                handle->elapsed_seconds += handle->time->Seconds;
+                handle->elapsed_seconds += handle->time.Seconds;
             }
             else
             {
@@ -76,9 +74,9 @@ void hourly_clock_update(hourly_clock_handle *handle)
         }
 
         // Update previous values
-        handle->prev_second = handle->time->Seconds;
-        handle->prev_minute = handle->time->Minutes;
-        handle->prev_hour = handle->time->Hours;
+        handle->prev_second = handle->time.Seconds;
+        handle->prev_minute = handle->time.Minutes;
+        handle->prev_hour = handle->time.Hours;
     }
 }
 

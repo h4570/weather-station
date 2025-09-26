@@ -58,7 +58,7 @@ void display_init(display_handle *handle)
     lv_display_set_rotation(display, LV_DISPLAY_ROTATION_90);
 }
 
-void display_loop(display_handle *handle, display_data *local, display_data *remote, const bool anything_changed)
+void display_loop(display_handle *handle, station_data *local, station_data *remote, const bool anything_changed)
 {
     if (anything_changed)
     {

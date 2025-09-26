@@ -13,9 +13,9 @@ extern "C"
      */
     typedef struct
     {
+        RTC_TimeTypeDef time;     /**< RTC time structure */
+        RTC_DateTypeDef date;     /**< RTC date structure */
         RTC_HandleTypeDef *hrtc;  /**< Pointer to RTC handle */
-        RTC_TimeTypeDef *time;    /**< Pointer to RTC time structure */
-        RTC_DateTypeDef *date;    /**< Pointer to RTC date structure */
         uint8_t prev_second;      /**< Previous second value for change detection */
         uint8_t prev_minute;      /**< Previous minute value for tracking hour changes */
         uint8_t prev_hour;        /**< Previous hour value for tracking hour changes */
@@ -32,11 +32,9 @@ extern "C"
      * @brief Create and initialize an hourly clock handle
      *
      * @param hrtc Pointer to the RTC handle
-     * @param time Pointer to RTC time structure
-     * @param date Pointer to RTC date structure
      * @return hourly_clock_handle The initialized hourly clock handle
      */
-    hourly_clock_handle hourly_clock_create(RTC_HandleTypeDef *hrtc, RTC_TimeTypeDef *time, RTC_DateTypeDef *date);
+    hourly_clock_handle hourly_clock_create(RTC_HandleTypeDef *hrtc);
 
     /**
      * @brief Update the elapsed seconds counter

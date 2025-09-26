@@ -2,19 +2,8 @@
 #include "app/display.h"
 #include "app/drivers/bmpxx80.h"
 #include "app/bat_nimh_calc.h"
-#include "app/hourly_clock.h"
 
-// === Business logic variables
-volatile uint16_t bat_vcc_adc_value, last_bat_vcc_adc_value;
-float temperature = 0, last_temperature = 0, humidity = 0, last_humidity = 0;
-int32_t pressure = 0, last_pressure = 0, bat_in = 0, last_bat_in = 0;
-bool anything_changed = true;
-RTC_TimeTypeDef sTime;
-RTC_DateTypeDef sDate;
-hourly_clock_handle hclock;
-hourly_clock_timestamp_t last_sensor_read_time = 0;
-hourly_clock_timestamp_t last_battery_read_time = 0;
-hourly_clock_timestamp_t last_check_changes_time = 0;
+volatile uint16_t bat_vcc_adc_value;
 
 // // Release
 // #define SENSOR_CHECK_EVERY_SEC 60
@@ -39,34 +28,41 @@ static void request_battery_read()
     HAL_ADC_Start_IT(&hadc1);
 }
 
-static void read_sensor()
+static void read_sensor(app_handle *handle)
 {
-    BME280_ReadTemperatureAndPressureAndHumidity(&temperature, &pressure, &humidity);
+    BME280_ReadTemperatureAndPressureAndHumidity(&handle->local.temperature, &handle->local.pressure, &handle->local.humidity);
 }
 
-static bool check_if_anything_changed()
+static bool check_if_anything_changed_locally(app_handle *handle)
 {
-    if (temperature != last_temperature || humidity != last_humidity || pressure != last_pressure || bat_in != last_bat_in)
+    if (handle->local.temperature != handle->last_local.temperature ||
+        handle->local.humidity != handle->last_local.humidity ||
+        handle->local.pressure != handle->last_local.pressure ||
+        handle->local.bat_in != handle->last_local.bat_in)
     {
-        last_temperature = temperature;
-        last_humidity = humidity;
-        last_pressure = pressure;
-        last_bat_in = bat_in;
         return true;
     }
 
     return false;
 }
 
-static void calc_bat_in_if_changed()
+static void update_last_local_data(app_handle *handle)
 {
-    if (bat_vcc_adc_value != last_bat_vcc_adc_value)
+    handle->last_local.temperature = handle->local.temperature;
+    handle->last_local.humidity = handle->local.humidity;
+    handle->last_local.pressure = handle->local.pressure;
+    handle->last_local.bat_in = handle->local.bat_in;
+}
+
+static void calc_bat_in_if_changed(app_handle *handle)
+{
+    if (bat_vcc_adc_value != handle->last_bat_vcc_adc_value)
     {
-        last_bat_vcc_adc_value = bat_vcc_adc_value;
+        handle->last_bat_vcc_adc_value = bat_vcc_adc_value;
+
         // 2x AA battery, voltage divider 100k/100k, ADC 12-bit, Vref = 3.3V
         float battery_voltage = bat_nimh_calc_get_voltage_for_soc(bat_vcc_adc_value, 3.3F, 2.0F);
-        bat_in = bat_nimh_calc_execute(battery_voltage, temperature);
-        last_bat_in = bat_in;
+        handle->local.bat_in = bat_nimh_calc_execute(battery_voltage, handle->local.temperature);
     }
 }
 
@@ -75,66 +71,80 @@ static void calc_bat_in_if_changed()
 // - Dodać usypianie i budzenie co np. 9s (RTC wakeup?)
 // - Przerobić na dwa projekty i wspólny kod między nimi
 
+static void init_station_data(station_data *data)
+{
+    data->temperature = 0;
+    data->humidity = 0;
+    data->pressure = 0;
+    data->bat_in = 0;
+}
+
 app_handle app_create()
 {
-    app_handle handle = {};
+    app_handle handle;
+
+    handle.display = display_create();
+    handle.hclock = hourly_clock_create(&hrtc);
+
+    init_station_data(&handle.local);
+    init_station_data(&handle.remote);
+    init_station_data(&handle.last_local);
+    init_station_data(&handle.last_remote);
+
+    handle.anything_changed = true;
+
+    handle.last_sensor_read_time = 0;
+    handle.last_battery_read_time = 0;
+    handle.last_check_changes_time = 0;
+
+    handle.last_bat_vcc_adc_value = 0;
 
     return handle;
 }
 
 void app_init(app_handle *handle)
 {
-    handle->display = display_create();
     display_init(&handle->display);
 
     init_sensor();
     request_battery_read();
-    read_sensor();
-
-    hclock = hourly_clock_create(&hrtc, &sTime, &sDate);
+    read_sensor(handle);
 
     // Initialize timing timestamps
-    last_sensor_read_time = hourly_clock_get_timestamp(&hclock);
-    last_battery_read_time = hourly_clock_get_timestamp(&hclock);
-    last_check_changes_time = hourly_clock_get_timestamp(&hclock);
+    handle->last_sensor_read_time = hourly_clock_get_timestamp(&handle->hclock);
+    handle->last_battery_read_time = hourly_clock_get_timestamp(&handle->hclock);
+    handle->last_check_changes_time = hourly_clock_get_timestamp(&handle->hclock);
 }
 
 void app_loop(app_handle *handle)
 {
-    hourly_clock_update(&hclock);
+    hourly_clock_update(&handle->hclock);
 
-    calc_bat_in_if_changed();
+    calc_bat_in_if_changed(handle);
 
-    if (hourly_clock_check_elapsed(&hclock, last_sensor_read_time, SENSOR_CHECK_EVERY_SEC))
+    if (hourly_clock_check_elapsed(&handle->hclock, handle->last_sensor_read_time, SENSOR_CHECK_EVERY_SEC))
     {
-        read_sensor();
-        last_sensor_read_time = hourly_clock_get_timestamp(&hclock);
+        read_sensor(handle);
+        handle->last_sensor_read_time = hourly_clock_get_timestamp(&handle->hclock);
     }
 
-    if (hourly_clock_check_elapsed(&hclock, last_battery_read_time, BATTERY_CHECK_EVERY_SEC))
+    if (hourly_clock_check_elapsed(&handle->hclock, handle->last_battery_read_time, BATTERY_CHECK_EVERY_SEC))
     {
         request_battery_read();
-        last_battery_read_time = hourly_clock_get_timestamp(&hclock);
+        handle->last_battery_read_time = hourly_clock_get_timestamp(&handle->hclock);
     }
 
-    if (hourly_clock_check_elapsed(&hclock, last_check_changes_time, DISPLAY_CHECK_CHANGES_EVERY_SEC))
+    if (hourly_clock_check_elapsed(&handle->hclock, handle->last_check_changes_time, DISPLAY_CHECK_CHANGES_EVERY_SEC))
     {
-        anything_changed = check_if_anything_changed();
-        last_check_changes_time = hourly_clock_get_timestamp(&hclock);
+        handle->anything_changed = check_if_anything_changed_locally(handle);
+        handle->last_check_changes_time = hourly_clock_get_timestamp(&handle->hclock);
     }
 
-    display_data local = {
-        .temperature = temperature,
-        .humidity = humidity,
-        .pressure = pressure,
-        .bat_in = bat_in,
-    };
+    display_loop(&handle->display, &handle->local, NULL, handle->anything_changed);
 
-    display_loop(&handle->display, &local, NULL, anything_changed);
-
-    if (anything_changed)
+    if (handle->anything_changed)
     {
-        anything_changed = false;
+        handle->anything_changed = false;
     }
 
     HAL_Delay(100);
