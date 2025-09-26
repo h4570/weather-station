@@ -38,6 +38,11 @@
         "functional": "cpp",
         "renderer.h": "c",
         "bat_nimh_calc.h": "c",
-        "hourly_clock.h": "c"
+        "hourly_clock.h": "c",
+        "app.h": "c",
+        "stdint.h": "c",
+        "stm32g4xx_hal_spi.h": "c",
+        "stm32g4xx_hal_rtc.h": "c",
+        "tim.h": "c"
     }
 }

@@ -55,16 +55,18 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
+    Core/Src/app/drivers/bmpxx80.c
     Core/Src/app/drivers/epd3in7_driver.c
     Core/Src/app/drivers/epd3in7_lvgl_adapter.c
-    Core/Src/app/drivers/bmpxx80.c
-    Core/Src/app/fonts/lv_font_opensans_thin_14.c
+    Core/Src/app/fonts/lv_font_opensans_bold_numbers_72.c
     Core/Src/app/fonts/lv_font_opensans_regular_16.c
     Core/Src/app/fonts/lv_font_opensans_regular_24.c
-    Core/Src/app/fonts/lv_font_opensans_bold_numbers_72.c
-    Core/Src/app/renderer.c
+    Core/Src/app/fonts/lv_font_opensans_thin_14.c
+    Core/Src/app/app.c
     Core/Src/app/bat_nimh_calc.c
+    Core/Src/app/display.c
     Core/Src/app/hourly_clock.c
+    Core/Src/app/renderer.c
 )
 
 # Add include paths
