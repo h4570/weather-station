@@ -51,6 +51,8 @@
         "battery.h": "c",
         "adc.h": "c",
         "stdbool.h": "c",
-        "tuple": "c"
+        "tuple": "c",
+        "stm32g4xx_nucleo.h": "c",
+        "rfm69.h": "c"
     }
 }

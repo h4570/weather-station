@@ -58,6 +58,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/app/drivers/bmpxx80.c
     Core/Src/app/drivers/epd3in7_driver.c
     Core/Src/app/drivers/epd3in7_lvgl_adapter.c
+    Core/Src/app/drivers/rfm69.c
     Core/Src/app/fonts/lv_font_opensans_bold_numbers_72.c
     Core/Src/app/fonts/lv_font_opensans_regular_16.c
     Core/Src/app/fonts/lv_font_opensans_regular_24.c
@@ -66,6 +67,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/app/battery.c
     Core/Src/app/display.c
     Core/Src/app/hourly_clock.c
+    Core/Src/app/radio.c
     Core/Src/app/renderer.c
     Core/Src/app/sensor.c
 )

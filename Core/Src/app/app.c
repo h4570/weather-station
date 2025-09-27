@@ -38,6 +38,7 @@ app_handle app_create()
     handle.display = display_create();
     handle.battery = battery_create();
     handle.hclock = hourly_clock_create(&hrtc);
+    handle.radio = radio_create(RAD_CS_GPIO_Port, RAD_CS_Pin, RAD_DIO0_GPIO_Port, RAD_DIO0_Pin, &hspi3);
 
     init_station_data(&handle.local);
     init_station_data(&handle.remote);
@@ -60,6 +61,8 @@ void app_init(app_handle *handle)
 
     battery_request_read(&handle->battery);
 
+    radio_init(&handle->radio);
+
     // Initialize timing timestamps
     handle->last_sensor_read_time = hourly_clock_get_timestamp(&handle->hclock);
     handle->last_battery_read_time = hourly_clock_get_timestamp(&handle->hclock);
@@ -67,7 +70,11 @@ void app_init(app_handle *handle)
 }
 
 // Plan:
-// - Dodać radio do układu i napisać sterownik na przerwaniach do odbioru danych
+// - Arbiter SPI
+// - BME280 na DMA
+// - Ekran na DMA
+// - Radio na DMA
+// - Obsługa błędów na wyświetlaczu
 // - Dodać usypianie i budzenie co np. 9s (RTC wakeup?)
 // - Przerobić na dwa projekty i wspólny kod między nimi
 
@@ -84,6 +91,7 @@ void app_init(app_handle *handle)
 void app_loop(app_handle *handle)
 {
     hourly_clock_update(&handle->hclock);
+    radio_loop(&handle->radio);
 
     if (hourly_clock_check_elapsed(&handle->hclock, handle->last_sensor_read_time, SENSOR_CHECK_EVERY_SEC))
     {
@@ -120,10 +128,15 @@ void app_loop(app_handle *handle)
 
     display_loop(&handle->display, &handle->local, NULL, changes_detected);
 
-    HAL_Delay(100);
+    HAL_Delay(1);
 }
 
 void app_adc_interrupt_handler(app_handle *handle, ADC_HandleTypeDef *hadc)
 {
     battery_adc_interrupt_handler(hadc);
+}
+
+void app_exti_interrupt_handler(const uint16_t pin)
+{
+    radio_exti_interrupt_handler(pin);
 }
