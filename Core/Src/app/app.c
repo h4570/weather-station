@@ -54,14 +54,13 @@ app_handle app_create()
 
 void app_init(app_handle *handle)
 {
-    display_init(&handle->display);
+    // display_init(&handle->display);
 
     sensor_init();
-    sensor_read(&handle->local);
 
-    battery_request_read(&handle->battery);
+    // battery_request_read(&handle->battery);
 
-    radio_init(&handle->radio);
+    // radio_init(&handle->radio);
 
     // Initialize timing timestamps
     handle->last_sensor_read_time = hourly_clock_get_timestamp(&handle->hclock);
@@ -70,8 +69,8 @@ void app_init(app_handle *handle)
 }
 
 // Plan:
-// - Arbiter SPI
-// - BME280 na DMA
+// - Sprzątanie kodu
+//   - spi_manager do app
 // - Ekran na DMA
 // - Radio na DMA
 // - Obsługa błędów na wyświetlaczu
@@ -91,42 +90,44 @@ void app_init(app_handle *handle)
 void app_loop(app_handle *handle)
 {
     hourly_clock_update(&handle->hclock);
-    radio_loop(&handle->radio);
+    // radio_loop(&handle->radio);
+    sensor_try_get(&handle->local);
 
     if (hourly_clock_check_elapsed(&handle->hclock, handle->last_sensor_read_time, SENSOR_CHECK_EVERY_SEC))
     {
-        sensor_read(&handle->local);
+        sensor_kick();
+
         handle->last_sensor_read_time = hourly_clock_get_timestamp(&handle->hclock);
         battery_update_temperature(&handle->battery, handle->local.temperature);
     }
 
-    if (hourly_clock_check_elapsed(&handle->hclock, handle->last_battery_read_time, BATTERY_CHECK_EVERY_SEC))
-    {
-        battery_refresh(&handle->battery);
+    // if (hourly_clock_check_elapsed(&handle->hclock, handle->last_battery_read_time, BATTERY_CHECK_EVERY_SEC))
+    // {
+    //     battery_refresh(&handle->battery);
 
-        if (battery_check_if_level_changed(&handle->battery))
-        {
-            handle->local.bat_in = battery_get_level(&handle->battery);
-        }
+    //     if (battery_check_if_level_changed(&handle->battery))
+    //     {
+    //         handle->local.bat_in = battery_get_level(&handle->battery);
+    //     }
 
-        battery_request_read(&handle->battery);
-        handle->last_battery_read_time = hourly_clock_get_timestamp(&handle->hclock);
-    }
+    //     battery_request_read(&handle->battery);
+    //     handle->last_battery_read_time = hourly_clock_get_timestamp(&handle->hclock);
+    // }
 
-    bool changes_detected = false;
+    // bool changes_detected = false;
 
-    if (hourly_clock_check_elapsed(&handle->hclock, handle->last_check_changes_time, DISPLAY_CHECK_CHANGES_EVERY_SEC))
-    {
-        changes_detected = check_if_anything_changed_locally(handle);
-        handle->last_check_changes_time = hourly_clock_get_timestamp(&handle->hclock);
+    // if (hourly_clock_check_elapsed(&handle->hclock, handle->last_check_changes_time, DISPLAY_CHECK_CHANGES_EVERY_SEC))
+    // {
+    //     changes_detected = check_if_anything_changed_locally(handle);
+    //     handle->last_check_changes_time = hourly_clock_get_timestamp(&handle->hclock);
 
-        if (changes_detected)
-        {
-            update_last_local_data(handle);
-        }
-    }
+    //     if (changes_detected)
+    //     {
+    //         update_last_local_data(handle);
+    //     }
+    // }
 
-    display_loop(&handle->display, &handle->local, NULL, changes_detected);
+    // display_loop(&handle->display, &handle->local, NULL, changes_detected);
 
     HAL_Delay(1);
 }

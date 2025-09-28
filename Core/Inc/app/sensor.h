@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <stdbool.h>
 #include "app/station_data.h"
 
 #ifdef __cplusplus
@@ -13,11 +14,19 @@ extern "C"
     void sensor_init();
 
     /**
-     * @brief Read the sensor values into the provided station_data structure
+     * @brief Trigger a non-blocking read of the sensor. Call sensor_try_get() later to check if data is ready.
      *
-     * @param station_data Pointer to the station_data structure to fill with sensor readings
+     * @return true if the read was successfully triggered, false if the sensor is busy
      */
-    void sensor_read(station_data *station_data);
+    bool sensor_kick();
+
+    /**
+     * @brief Try to get the latest sensor readings if available.
+     *
+     * @param out Pointer to station_data structure to fill with the latest readings
+     * @return true if new data was available and copied to out, false otherwise
+     */
+    bool sensor_try_get(station_data *out);
 
 #ifdef __cplusplus
 }
