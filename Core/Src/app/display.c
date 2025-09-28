@@ -48,8 +48,7 @@ void display_init(display_handle *handle)
         &epd3in7_drv,
         epd3in7_adapter_work_buffer,
         10,
-        EPD3IN7_DRIVER_MODE_A2,
-        32);
+        EPD3IN7_DRIVER_MODE_A2);
 
     lv_init();
     lv_tick_set_cb(HAL_GetTick);
