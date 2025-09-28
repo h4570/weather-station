@@ -53,6 +53,9 @@
         "stdbool.h": "c",
         "tuple": "c",
         "stm32g4xx_nucleo.h": "c",
-        "rfm69.h": "c"
+        "rfm69.h": "c",
+        "radio.h": "c",
+        "bme280_async.h": "c",
+        "spi_bus_manager.h": "c"
     }
 }

@@ -31,32 +31,27 @@ static void init_station_data(station_data *data)
     data->bat_in = 0;
 }
 
-app_handle app_create()
-{
-    app_handle handle;
-
-    handle.display = display_create();
-    handle.battery = battery_create();
-    handle.hclock = hourly_clock_create(&hrtc);
-    handle.radio = radio_create(RAD_CS_GPIO_Port, RAD_CS_Pin, RAD_DIO0_GPIO_Port, RAD_DIO0_Pin, &hspi3);
-
-    init_station_data(&handle.local);
-    init_station_data(&handle.remote);
-    init_station_data(&handle.last_local);
-    init_station_data(&handle.last_remote);
-
-    handle.last_sensor_read_time = 0;
-    handle.last_battery_read_time = 0;
-    handle.last_check_changes_time = 0;
-
-    return handle;
-}
-
 void app_init(app_handle *handle)
 {
+    handle->display = display_create();
+    handle->battery = battery_create();
+    handle->hclock = hourly_clock_create(&hrtc);
+    handle->radio = radio_create(RAD_CS_GPIO_Port, RAD_CS_Pin, RAD_DIO0_GPIO_Port, RAD_DIO0_Pin, &hspi3);
+    handle->spi_mgr = spi_bus_manager_create(&hspi2, handle->app_spiq_storage, (uint16_t)(sizeof(handle->app_spiq_storage) / sizeof(handle->app_spiq_storage[0])));
+    handle->sensor = sensor_create(&handle->spi_mgr);
+
+    init_station_data(&handle->local);
+    init_station_data(&handle->remote);
+    init_station_data(&handle->last_local);
+    init_station_data(&handle->last_remote);
+
+    handle->last_sensor_read_time = 0;
+    handle->last_battery_read_time = 0;
+    handle->last_check_changes_time = 0;
+
     // display_init(&handle->display);
 
-    sensor_init();
+    sensor_init(&handle->sensor);
 
     // battery_request_read(&handle->battery);
 
@@ -69,8 +64,6 @@ void app_init(app_handle *handle)
 }
 
 // Plan:
-// - Sprzątanie kodu
-//   - spi_manager do app
 // - Ekran na DMA
 // - Radio na DMA
 // - Obsługa błędów na wyświetlaczu
@@ -91,11 +84,11 @@ void app_loop(app_handle *handle)
 {
     hourly_clock_update(&handle->hclock);
     // radio_loop(&handle->radio);
-    sensor_try_get(&handle->local);
+    sensor_try_get(&handle->sensor, &handle->local);
 
     if (hourly_clock_check_elapsed(&handle->hclock, handle->last_sensor_read_time, SENSOR_CHECK_EVERY_SEC))
     {
-        sensor_kick();
+        sensor_kick(&handle->sensor);
 
         handle->last_sensor_read_time = hourly_clock_get_timestamp(&handle->hclock);
         battery_update_temperature(&handle->battery, handle->local.temperature);
@@ -132,12 +125,37 @@ void app_loop(app_handle *handle)
     HAL_Delay(1);
 }
 
-void app_adc_interrupt_handler(app_handle *handle, ADC_HandleTypeDef *hadc)
+void app_adc_conv_cplt_callback(app_handle *handle, ADC_HandleTypeDef *hadc)
 {
     battery_adc_interrupt_handler(hadc);
 }
 
-void app_exti_interrupt_handler(const uint16_t pin)
+void app_gpio_exti_callback(app_handle *handle, const uint16_t pin)
 {
     radio_exti_interrupt_handler(pin);
+}
+
+void app_spi_tx_cplt_callback(app_handle *handle, SPI_HandleTypeDef *hspi)
+{
+    spi_bus_manager_on_tx_cplt(&handle->spi_mgr, hspi);
+}
+
+void app_spi_tx_half_cplt_callback(app_handle *handle, SPI_HandleTypeDef *hspi)
+{
+    spi_bus_manager_on_tx_cplt(&handle->spi_mgr, hspi);
+}
+
+void app_spi_txrx_cplt_callback(app_handle *handle, SPI_HandleTypeDef *hspi)
+{
+    spi_bus_manager_on_txrx_cplt(&handle->spi_mgr, hspi);
+}
+
+void app_spi_txrx_half_cplt_callback(app_handle *handle, SPI_HandleTypeDef *hspi)
+{
+    spi_bus_manager_on_txrx_cplt(&handle->spi_mgr, hspi);
+}
+
+void app_spi_error_callback(app_handle *handle, SPI_HandleTypeDef *hspi)
+{
+    spi_bus_manager_on_error(&handle->spi_mgr, hspi);
 }
