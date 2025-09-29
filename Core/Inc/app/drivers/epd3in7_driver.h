@@ -120,6 +120,15 @@ extern "C"
     epd3in7_driver_handle epd3in7_driver_create(const epd3in7_driver_pins pins, SPI_HandleTypeDef *spi_handle, const bool busy_active_high);
 
     /**
+     * @brief Check if the display is currently busy
+     *
+     * @param handle Pointer to the e-Paper display handle
+     * @return true Display is busy
+     * @return false Display is idle
+     */
+    bool epd3in7_driver_is_busy(const epd3in7_driver_handle *handle);
+
+    /**
      * @brief Wait until the display is no longer busy (wait for draw to finish)
      *
      * @param handle Pointer to the e-Paper display handle

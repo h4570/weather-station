@@ -64,7 +64,6 @@ void app_init(app_handle *handle)
 }
 
 // Plan:
-// - Ekran na DMA
 // - Radio na DMA
 // - Obsługa błędów na wyświetlaczu
 // - Dodać usypianie i budzenie co np. 9s (RTC wakeup?)
@@ -84,15 +83,15 @@ void app_loop(app_handle *handle)
 {
     hourly_clock_update(&handle->hclock);
     // radio_loop(&handle->radio);
-    // sensor_try_get(&handle->sensor, &handle->local);
+    sensor_try_get(&handle->sensor, &handle->local);
 
-    // if (hourly_clock_check_elapsed(&handle->hclock, handle->last_sensor_read_time, SENSOR_CHECK_EVERY_SEC))
-    // {
-    //     sensor_kick(&handle->sensor);
+    if (hourly_clock_check_elapsed(&handle->hclock, handle->last_sensor_read_time, SENSOR_CHECK_EVERY_SEC))
+    {
+        sensor_kick(&handle->sensor);
 
-    //     handle->last_sensor_read_time = hourly_clock_get_timestamp(&handle->hclock);
-    //     battery_update_temperature(&handle->battery, handle->local.temperature);
-    // }
+        handle->last_sensor_read_time = hourly_clock_get_timestamp(&handle->hclock);
+        battery_update_temperature(&handle->battery, handle->local.temperature);
+    }
 
     // if (hourly_clock_check_elapsed(&handle->hclock, handle->last_battery_read_time, BATTERY_CHECK_EVERY_SEC))
     // {

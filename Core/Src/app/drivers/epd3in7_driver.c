@@ -267,6 +267,19 @@ epd3in7_driver_handle epd3in7_driver_create(const epd3in7_driver_pins pins, SPI_
     return handle;
 }
 
+bool epd3in7_driver_is_busy(const epd3in7_driver_handle *handle)
+{
+    uint8_t busy = HAL_GPIO_ReadPin(handle->pins.busy_port, handle->pins.busy_pin);
+    if (handle->busy_active_high)
+    {
+        return busy == GPIO_PIN_SET;
+    }
+    else
+    {
+        return busy == GPIO_PIN_RESET;
+    }
+}
+
 epd3in7_driver_status epd3in7_driver_busy_wait_for_idle(const epd3in7_driver_handle *handle)
 {
     uint8_t busy;
@@ -864,28 +877,13 @@ uint8_t epd3in7_driver_dma_sleep = EPD_CMD_SLEEP;
 uint8_t epd3in7_driver_dma_power_off = EPD_CMD_POWEROFF;
 uint8_t epd3in7_driver_dma_sleep2 = EPD_CMD_SLEEP2;
 
-/* Wait predicate: returns true when the panel is ready (BUSY de-asserted). */
-static bool epd3in7_wait_ready_predicate(void *user)
-{
-    epd3in7_driver_handle *h = (epd3in7_driver_handle *)user;
-    GPIO_PinState s = HAL_GPIO_ReadPin(h->pins.busy_port, h->pins.busy_pin);
-    /* BUSY polarity: active high -> ready when LOW; active low -> ready when HIGH */
-    if (h->busy_active_high)
-    {
-        return (s == GPIO_PIN_RESET);
-    }
-    else
-    {
-        return (s == GPIO_PIN_SET);
-    }
-}
-
 /* Build a "single byte command" transaction. */
 static spi_bus_transaction epd_tx_cmd(epd3in7_driver_handle *h,
                                       spi_bus_gpio cs, spi_bus_gpio dc,
                                       uint8_t *cmd)
 {
     spi_bus_transaction t = {0};
+    t.kind = SPI_BUS_ITEM_TX;
     t.cs = cs;
     t.dc = dc;
     t.dc_mode = SPI_BUS_DC_COMMAND;
@@ -909,11 +907,12 @@ static spi_bus_transaction epd_tx_cmd(epd3in7_driver_handle *h,
 /* Build a "data block" transaction. Optionally attach a BUSY wait after it. */
 static spi_bus_transaction epd_tx_data(epd3in7_driver_handle *h,
                                        spi_bus_gpio cs, spi_bus_gpio dc,
-                                       const uint8_t *buf, uint32_t len, bool wait_busy_after)
+                                       const uint8_t *buf, uint32_t len)
 {
     assert(len <= 65535);
 
     spi_bus_transaction t = {0};
+    t.kind = SPI_BUS_ITEM_TX;
     t.cs = cs;
     t.dc = dc;
     t.dc_mode = SPI_BUS_DC_DATA;
@@ -927,28 +926,19 @@ static spi_bus_transaction epd_tx_data(epd3in7_driver_handle *h,
     t.on_done = NULL;
     t.on_half = NULL;
     t.on_error = NULL;
-
-    if (wait_busy_after)
-    {
-        t.wait_ready = epd3in7_wait_ready_predicate;
-        t.wait_timeout_ms = EPD3IN7_DRIVER_BUSY_TIMEOUT;
-        t.user = h;
-    }
-    else
-    {
-        t.wait_ready = NULL;
-        t.wait_timeout_ms = 0;
-        t.user = NULL;
-    }
+    t.wait_ready = NULL;
+    t.wait_timeout_ms = 0;
+    t.user = NULL;
 
     return t;
 }
 
 static spi_bus_transaction epd_tx_cmd_wait(epd3in7_driver_handle *h,
                                            spi_bus_gpio cs, spi_bus_gpio dc,
-                                           uint8_t *cmd, bool wait_busy_after)
+                                           uint8_t *cmd)
 {
     spi_bus_transaction t = {0};
+    t.kind = SPI_BUS_ITEM_TX;
     t.cs = cs;
     t.dc = dc;
     t.dc_mode = SPI_BUS_DC_COMMAND; // DC=0
@@ -959,19 +949,9 @@ static spi_bus_transaction epd_tx_cmd_wait(epd3in7_driver_handle *h,
     t.len = 1;
     t.dir = SPI_BUS_DIR_TX;
     t.spi_timeout = HAL_MAX_DELAY;
-
-    if (wait_busy_after)
-    {
-        t.wait_ready = epd3in7_wait_ready_predicate;
-        t.wait_timeout_ms = EPD3IN7_DRIVER_BUSY_TIMEOUT;
-        t.user = h;
-    }
-    else
-    {
-        t.wait_ready = NULL;
-        t.wait_timeout_ms = 0;
-        t.user = NULL;
-    }
+    t.wait_ready = NULL;
+    t.wait_timeout_ms = 0;
+    t.user = NULL;
 
     return t;
 }
@@ -981,7 +961,7 @@ static spi_bus_transaction epd_tx_payload(epd3in7_driver_handle *h,
                                           spi_bus_gpio cs, spi_bus_gpio dc,
                                           const uint8_t *buf, uint16_t len)
 {
-    return epd_tx_data(h, cs, dc, buf, len, false);
+    return epd_tx_data(h, cs, dc, buf, len);
 }
 
 /* Enqueue a LUT write (mirrors epd3in7_driver_load_lut, but queue-based). */
@@ -1086,7 +1066,7 @@ epd3in7_driver_status epd3in7_driver_display_1_gray_dma(epd3in7_driver_handle *h
             return EPD3IN7_DRIVER_SPI_BUS_ERR;
 
         const uint16_t image_counter = (uint16_t)(EPD3IN7_WIDTH * EPD3IN7_HEIGHT / 8); // 16800
-        spi_bus_transaction tr_data = epd_tx_data(handle, cs, dc, image, image_counter, false);
+        spi_bus_transaction tr_data = epd_tx_data(handle, cs, dc, image, image_counter);
         if (spi_bus_manager_submit(mgr, &tr_data) != SPI_BUS_MANAGER_OK)
             return EPD3IN7_DRIVER_SPI_BUS_ERR;
     }
@@ -1101,7 +1081,7 @@ epd3in7_driver_status epd3in7_driver_display_1_gray_dma(epd3in7_driver_handle *h
 
     /* Display update sequence */
     {
-        spi_bus_transaction tr = epd_tx_cmd_wait(handle, cs, dc, &epd3in7_driver_dma_display_update, true /* wait BUSY */);
+        spi_bus_transaction tr = epd_tx_cmd_wait(handle, cs, dc, &epd3in7_driver_dma_display_update);
         if (spi_bus_manager_submit(mgr, &tr) != SPI_BUS_MANAGER_OK)
             return EPD3IN7_DRIVER_SPI_BUS_ERR;
     }

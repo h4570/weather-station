@@ -75,5 +75,11 @@ void display_loop(display_handle *handle, station_data *local, station_data *rem
         }
     }
 
+    if (epd3in7_driver_is_busy(&epd3in7_drv))
+    {
+        // Busy wait for the display to become idle
+        return;
+    }
+
     lv_timer_handler();
 }

@@ -91,6 +91,36 @@ epd3in7_lvgl_adapter_handle epd3in7_lvgl_adapter_create(epd3in7_driver_handle *d
     h.is_sleeping = false;
     h.refresh_cycles_before_gc = refresh_cycles_before_gc;
     h.default_mode = default_mode;
+
+    /* Legacy path: no bus manager */
+    h.spi_mgr = NULL;
+    h.cs_gpio = (spi_bus_gpio){0};
+    h.dc_gpio = (spi_bus_gpio){0};
+    return h;
+}
+
+epd3in7_lvgl_adapter_handle epd3in7_lvgl_adapter_create_with_bus_manager(epd3in7_driver_handle *driver,
+                                                                         uint8_t *work_buffer,
+                                                                         int8_t refresh_cycles_before_gc,
+                                                                         epd3in7_driver_mode default_mode,
+                                                                         spi_bus_manager *spi_mgr)
+{
+    epd3in7_lvgl_adapter_handle h = epd3in7_lvgl_adapter_create(driver, work_buffer,
+                                                                refresh_cycles_before_gc, default_mode);
+    h.spi_mgr = spi_mgr;
+
+    /* Map driver pins to spi_bus_gpio roles. */
+    h.cs_gpio.port = driver->pins.cs_port;
+    h.cs_gpio.pin = driver->pins.cs_pin;
+    h.cs_gpio.active_low = true; /* CS active low */
+
+    h.dc_gpio.port = driver->pins.dc_port;
+    h.dc_gpio.pin = driver->pins.dc_pin;
+    h.dc_gpio.active_low = false; /* DC=0 -> command, DC=1 -> data */
+
+    h.dma_in_progress = false;
+    h.pending_disp = NULL;
+
     return h;
 }
 
@@ -99,10 +129,25 @@ void epd3in7_lvgl_adapter_free(epd3in7_lvgl_adapter_handle *handle)
     if (!handle)
         return;
 
+    /* If a DMA frame is still pending, wait for bus idle to avoid cutting power mid-transfer. */
+    if (handle->spi_mgr)
+    {
+        while (!spi_bus_manager_is_idle(handle->spi_mgr))
+        { /* busy wait */
+        }
+    }
+
     /* Put display to sleep before freeing the handle. */
     if (handle->is_initialized)
     {
-        epd3in7_driver_sleep(handle->driver, EPD3IN7_DRIVER_SLEEP_NORMAL);
+        if (handle->spi_mgr)
+        {
+            (void)epd3in7_driver_sleep_dma(handle->driver, handle->spi_mgr, EPD3IN7_DRIVER_SLEEP_NORMAL);
+        }
+        else
+        {
+            (void)epd3in7_driver_sleep(handle->driver, EPD3IN7_DRIVER_SLEEP_NORMAL);
+        }
         handle->is_sleeping = true;
         handle->is_initialized = false;
     }
@@ -165,7 +210,11 @@ void epd3in7_lvgl_adapter_flush(lv_display_t *disp, const lv_area_t *area, uint8
     const int32_t src_h = lv_area_get_height(src_area);
     const uint32_t src_stride = lv_draw_buf_width_to_stride(src_w, cf);
 
-    const uint8_t *src = px_map;
+    static uint8_t palette_bytes = 8;
+
+    // LVGL I1: first 8 bytes in LVGL buffer is palette (2 colors * 4 bytes ARGB32)
+    // We need to skip it, because EPD3IN7 driver expects pure 1bpp data
+    uint8_t *src = px_map + palette_bytes;
 
     if (rotation != LV_DISPLAY_ROTATION_0)
     {
@@ -206,4 +255,131 @@ void epd3in7_lvgl_adapter_flush(lv_display_t *disp, const lv_area_t *area, uint8
     h->is_sleeping = true;
 
     lv_display_flush_ready(disp);
+}
+
+/* ---- Safe handoff to LVGL context ---- */
+static void epd3in7_lvgl_adapter_lvgl_flush_ready_async(void *p)
+{
+    lv_display_t *disp = (lv_display_t *)p;
+    if (disp)
+        lv_display_flush_ready(disp);
+}
+
+/* Adapter's internal completion (user-level) */
+static void epd3in7_lvgl_adapter_dma_done_cb(void *user)
+{
+    epd3in7_lvgl_adapter_handle *h = (epd3in7_lvgl_adapter_handle *)user;
+    if (!h)
+        return;
+    h->dma_in_progress = false;
+
+    /* Hand-off to LVGL context (never call LVGL directly from ISR) */
+    lv_async_call(epd3in7_lvgl_adapter_lvgl_flush_ready_async, h->pending_disp);
+}
+
+/* Wrapper to match spi_bus_done_cb signature (mgr, user) */
+// NOTE: keep ISR-safe and very short.
+static void epd3in7_lvgl_adapter_dma_done_cb_mgr(struct spi_bus_manager *mgr, void *user)
+{
+    (void)mgr; /* unused */
+    epd3in7_lvgl_adapter_dma_done_cb(user);
+}
+
+void epd3in7_lvgl_adapter_flush_dma(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
+{
+    epd3in7_lvgl_adapter_handle *h = lv_display_get_driver_data(disp);
+    if (!h || !px_map)
+    {
+        lv_display_flush_ready(disp);
+        return;
+    }
+
+    if (!h->spi_mgr)
+    {
+        /* Safety net: if manager not provided, fallback to legacy path. */
+        epd3in7_lvgl_adapter_flush(disp, area, px_map);
+        return;
+    }
+
+    /* Ensure panel is initialized once (blocking init on first use). */
+    if (!h->is_initialized)
+    {
+        /* Wait for the SPI bus to become idle before a blocking init. */
+        while (!spi_bus_manager_is_idle(h->spi_mgr))
+        { /* busy wait */
+        }
+        if (epd3in7_driver_init_1_gray(h->driver) != EPD3IN7_DRIVER_OK)
+        {
+            lv_display_flush_ready(disp);
+            return;
+        }
+        h->refresh_counter = 99; /* Force GC on first transfer */
+        h->is_initialized = true;
+        h->is_sleeping = false;
+    }
+
+    /* Decide refresh mode (GC vs A2/DU) */
+    epd3in7_driver_mode mode;
+    if (h->refresh_counter >= (uint8_t)(h->refresh_cycles_before_gc - 1))
+    {
+        mode = EPD3IN7_DRIVER_MODE_GC;
+        h->refresh_counter = 0;
+    }
+    else
+    {
+        mode = h->default_mode;
+        h->refresh_counter++;
+    }
+
+    lv_display_rotation_t rotation = lv_display_get_rotation(disp);
+    lv_color_format_t cf = lv_display_get_color_format(disp);
+
+    const lv_area_t *src_area = area;
+    lv_area_t rotated_area;
+
+    const int32_t src_w = lv_area_get_width(src_area);
+    const int32_t src_h = lv_area_get_height(src_area);
+    const uint32_t src_stride = lv_draw_buf_width_to_stride(src_w, cf);
+
+    static uint8_t palette_bytes = 8;
+
+    // LVGL I1: first 8 bytes in LVGL buffer is palette (2 colors * 4 bytes ARGB32)
+    // We need to skip it, because EPD3IN7 driver expects pure 1bpp data
+    uint8_t *src = px_map + palette_bytes;
+
+    if (!h->work_buffer)
+    {
+        /* No work buffer -> we cannot DMA safely (source may vanish). Fallback to blocking path. */
+        epd3in7_lvgl_adapter_flush(disp, area, px_map);
+        return;
+    }
+
+    if (rotation != LV_DISPLAY_ROTATION_0)
+    {
+        rotated_area = *src_area;
+        lv_display_rotate_area(disp, &rotated_area);
+        const int32_t dst_w = lv_area_get_width(&rotated_area);
+        const uint32_t dst_stride = lv_draw_buf_width_to_stride(dst_w, cf);
+
+        epd3in7_lvgl_adapter_rotate_i1(src, h->work_buffer, src_w, src_h,
+                                       (int32_t)src_stride, (int32_t)dst_stride, rotation);
+    }
+    else
+    {
+        /* Fast path: full-frame memcpy into work_buffer */
+        const uint32_t frame_bytes = (uint32_t)src_stride * (uint32_t)src_h;
+        memcpy(h->work_buffer, src, frame_bytes);
+    }
+
+    /* Enqueue frame (non-blocking) + sleep afterwards. */
+    (void)epd3in7_driver_display_1_gray_dma(h->driver, h->spi_mgr, (const uint8_t *)h->work_buffer, mode);
+    (void)epd3in7_driver_sleep_dma(h->driver, h->spi_mgr, EPD3IN7_DRIVER_SLEEP_NORMAL);
+    h->is_sleeping = true;
+
+    /* ---- Register completion callback AFTER enqueuing last txn ---- */
+    h->dma_in_progress = true;
+    h->pending_disp = disp;
+    spi_bus_manager_enqueue_callback(h->spi_mgr,
+                                     epd3in7_lvgl_adapter_dma_done_cb_mgr,
+                                     (void *)h);
 }

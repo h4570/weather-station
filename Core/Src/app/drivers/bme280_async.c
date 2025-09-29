@@ -145,6 +145,7 @@ bool bme280_async_trigger_read(bme280_async *dev)
     dev->error = false;
 
     spi_bus_transaction t = {
+        .kind = SPI_BUS_ITEM_TX,
         .cs = dev->cs,
         .dc = (spi_bus_gpio){.port = NULL, .pin = 0, .active_low = true},
         .dc_mode = SPI_BUS_DC_UNUSED,
