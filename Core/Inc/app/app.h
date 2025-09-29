@@ -32,7 +32,7 @@ extern "C"
         radio_handle radio;
         sensor_handle sensor;
         spi_bus_manager spi_mgr;
-        spi_bus_transaction app_spiq_storage[16];
+        spi_bus_transaction app_spiq_storage[64];
         station_data local, remote, last_local, last_remote;
         hourly_clock_timestamp_t last_sensor_read_time;
         hourly_clock_timestamp_t last_battery_read_time;

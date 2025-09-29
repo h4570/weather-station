@@ -22,11 +22,12 @@ static uint8_t epd3in7_adapter_work_buffer[DISPLAY_BUFFER_SIZE];
 static epd3in7_lvgl_adapter_handle epd3in7_adapter;
 static epd3in7_driver_handle epd3in7_drv;
 
-display_handle display_create()
+display_handle display_create(spi_bus_manager *spi_mgr)
 {
     display_handle handle = {};
 
     handle.anything_was_rendered = false;
+    handle.spi_mgr = spi_mgr;
 
     return handle;
 }
@@ -44,18 +45,19 @@ void display_init(display_handle *handle)
                                             .cs_pin = DISP_CS_Pin},
                                         &hspi2, true);
 
-    epd3in7_adapter = epd3in7_lvgl_adapter_create(
+    epd3in7_adapter = epd3in7_lvgl_adapter_create_with_bus_manager(
         &epd3in7_drv,
         epd3in7_adapter_work_buffer,
         10,
-        EPD3IN7_DRIVER_MODE_A2);
+        EPD3IN7_DRIVER_MODE_A2,
+        handle->spi_mgr);
 
     lv_init();
     lv_tick_set_cb(HAL_GetTick);
     lv_display_t *display = lv_display_create(EPD3IN7_WIDTH, EPD3IN7_HEIGHT);
     lv_display_set_driver_data(display, &epd3in7_adapter);
     lv_display_set_buffers(display, lvgl_buffer, NULL, sizeof(lvgl_buffer), LV_DISPLAY_RENDER_MODE_FULL);
-    lv_display_set_flush_cb(display, epd3in7_lvgl_adapter_flush);
+    lv_display_set_flush_cb(display, epd3in7_lvgl_adapter_flush_dma);
     lv_display_set_rotation(display, LV_DISPLAY_ROTATION_90);
 }
 
