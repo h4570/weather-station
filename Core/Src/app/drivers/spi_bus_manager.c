@@ -1,9 +1,9 @@
 #include "app/drivers/spi_bus_manager.h"
+#include <string.h>
 
 #if SPI_BUS_MANAGER_DEBUG
 #include <stdarg.h>
 #include <stdio.h>
-#include <string.h>
 #include <stdint.h>
 
 /* ============================ DEBUG LOG BUFFER ============================ */
@@ -187,12 +187,28 @@ static void spi_bus_pop(spi_bus_manager *mgr)
 static void spi_bus_try_start(spi_bus_manager *mgr)
 {
     spi_dbg_log("try_start busy=%d empty=%d\n", (int)mgr->busy, (int)SPI_Q_EMPTY(mgr));
+
     if (mgr->busy)
         return;
+
     if (SPI_Q_EMPTY(mgr))
         return;
 
     spi_bus_transaction *t = &mgr->q[mgr->q_head];
+
+    /* callback-only item – no DMA, no CS/DC */
+    if (t->kind == SPI_BUS_ITEM_CALLBACK)
+    {
+        spi_dbg_log("start callback at head=%u user=%p\n", mgr->q_head, t->user);
+        if (t->on_done)
+            t->on_done(mgr, t->user);
+        /* Pop and immediately try the next one (may chain callbacks) */
+        spi_bus_pop(mgr);
+        /* Do not set busy for pure callback */
+        spi_bus_try_start(mgr);
+        return;
+    }
+
     mgr->busy = true;
 
     spi_dbg_log("start tx head=%u dir=%d len=%u dc_mode=%d cs.port=%p ds=%s\n",
@@ -346,26 +362,32 @@ spi_bus_manager spi_bus_manager_create(SPI_HandleTypeDef *spi,
 spi_bus_manager_status spi_bus_manager_submit(spi_bus_manager *mgr, const spi_bus_transaction *t)
 {
     spi_dbg_log("submit mgr=%p t=%p\n", (void *)mgr, (void *)t);
+
     if (!mgr || !t || !mgr->spi || !mgr->q || mgr->q_capacity == 0)
     {
         spi_dbg_log("submit ERR_PARAM (nulls/cap)\n");
         return SPI_BUS_MANAGER_ERR_PARAM;
     }
-    if (!t->cs.port)
+
+    if (t->kind != SPI_BUS_ITEM_CALLBACK)
     {
-        spi_dbg_log("submit ERR_PARAM (no CS)\n");
-        return SPI_BUS_MANAGER_ERR_PARAM;
+        if (!t->cs.port)
+        {
+            spi_dbg_log("submit ERR_PARAM (no CS)\n");
+            return SPI_BUS_MANAGER_ERR_PARAM;
+        }
+        if (!t->tx || t->len == 0)
+        {
+            spi_dbg_log("submit ERR_PARAM (tx/len)\n");
+            return SPI_BUS_MANAGER_ERR_PARAM;
+        }
+        if (t->dir == SPI_BUS_DIR_TXRX && !t->rx)
+        {
+            spi_dbg_log("submit ERR_PARAM (txrx no rx)\n");
+            return SPI_BUS_MANAGER_ERR_PARAM;
+        }
     }
-    if (!t->tx || t->len == 0)
-    {
-        spi_dbg_log("submit ERR_PARAM (tx/len)\n");
-        return SPI_BUS_MANAGER_ERR_PARAM;
-    }
-    if (t->dir == SPI_BUS_DIR_TXRX && !t->rx)
-    {
-        spi_dbg_log("submit ERR_PARAM (txrx no rx)\n");
-        return SPI_BUS_MANAGER_ERR_PARAM;
-    }
+
     if (SPI_Q_FULL(mgr))
     {
         spi_dbg_log("submit ERR_FULL head=%u tail=%u cap=%u\n", mgr->q_head, mgr->q_tail, mgr->q_capacity);
@@ -374,11 +396,20 @@ spi_bus_manager_status spi_bus_manager_submit(spi_bus_manager *mgr, const spi_bu
 
     /* Copy by value into queue tail */
     mgr->q[mgr->q_tail] = *t;
+
+    /* Force kind=TX for normal submissions (backward compat) */
+    if (mgr->q[mgr->q_tail].kind != SPI_BUS_ITEM_CALLBACK)
+    {
+        mgr->q[mgr->q_tail].kind = SPI_BUS_ITEM_TX;
+    }
+
     spi_dbg_log("submit queued at %u len=%u dir=%d user=%p\n", mgr->q_tail, (unsigned)t->len, (int)t->dir, t->user);
+
     mgr->q_tail = SPI_Q_INCR(mgr->q_tail, mgr->q_capacity);
 
     /* Try to start immediately if bus idle (works from thread level and ISR) */
     spi_bus_try_start(mgr);
+
     return SPI_BUS_MANAGER_OK;
 }
 
@@ -447,4 +478,31 @@ void spi_bus_manager_on_error(spi_bus_manager *mgr, SPI_HandleTypeDef *hspi)
     }
     mgr->busy = false;
     spi_bus_try_start(mgr);
+}
+
+spi_bus_manager_status spi_bus_manager_enqueue_callback(spi_bus_manager *mgr,
+                                                        spi_bus_done_cb cb,
+                                                        void *user)
+{
+    spi_dbg_log("enqueue_cb mgr=%p cb=%p user=%p\n", (void *)mgr, (void *)cb, user);
+    if (!mgr || !cb || !mgr->q || mgr->q_capacity == 0)
+        return SPI_BUS_MANAGER_ERR_PARAM;
+    if (SPI_Q_FULL(mgr))
+        return SPI_BUS_MANAGER_ERR_FULL;
+
+    spi_bus_transaction t;
+    /* Zero everything, then set only what callback needs */
+    memset(&t, 0, sizeof(t));
+    t.kind = SPI_BUS_ITEM_CALLBACK;
+    t.on_done = cb;
+    t.user = user;
+
+    /* Push like normal submit: copy by value */
+    mgr->q[mgr->q_tail] = t;
+    spi_dbg_log("enqueue_cb queued at %u\n", mgr->q_tail);
+    mgr->q_tail = SPI_Q_INCR(mgr->q_tail, mgr->q_capacity);
+
+    /* Kick the engine (works from ISR or thread) */
+    spi_bus_try_start(mgr);
+    return SPI_BUS_MANAGER_OK;
 }

@@ -41,6 +41,13 @@ extern "C"
         SPI_BUS_MANAGER_ERR_HAL = -4,
     } spi_bus_manager_status;
 
+    /* ---------------------------- Transaction kind ---------------------------- */
+    typedef enum
+    {
+        SPI_BUS_ITEM_TX = 0,      /**< Normal DMA transaction (TX/TXRX). */
+        SPI_BUS_ITEM_CALLBACK = 1 /**< Fence/callback item (no DMA, no CS/DC). */
+    } spi_bus_item_kind;
+
     /* ------------------------------- GPIO helpers ------------------------------ */
 
     typedef struct
@@ -100,6 +107,8 @@ extern "C"
      */
     typedef struct
     {
+        spi_bus_item_kind kind; /**< SPI_BUS_ITEM_TX or SPI_BUS_ITEM_CALLBACK */
+
         /* Bus lines */
         spi_bus_gpio cs;         /**< Chip Select line (required). */
         spi_bus_gpio dc;         /**< Optional DC line; set .port=NULL if unused. */
@@ -213,6 +222,18 @@ extern "C"
      * @brief Call from HAL_SPI_ErrorCallback().
      */
     void spi_bus_manager_on_error(spi_bus_manager *mgr, SPI_HandleTypeDef *hspi);
+
+    /**
+     * @brief Enqueue a pure callback item that fires after all previously queued
+     *        transactions complete. Executes in manager context (often ISR).
+     * @param mgr   Manager
+     * @param cb    Callback to invoke (must be non-NULL)
+     * @param user  User pointer passed to callback
+     * @return SPI_BUS_MANAGER_OK or *_ERR_*
+     */
+    spi_bus_manager_status spi_bus_manager_enqueue_callback(spi_bus_manager *mgr,
+                                                            spi_bus_done_cb cb,
+                                                            void *user);
 
     /* ------------------------------ Usage example ------------------------------
      *
