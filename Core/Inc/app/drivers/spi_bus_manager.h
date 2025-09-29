@@ -190,15 +190,24 @@ extern "C"
 
     /* -------------------------- HAL integration hooks ------------------------- */
     /**
-     * @brief Call from HAL_SPI_TxCpltCallback() and/or HAL_SPI_TxHalfCpltCallback().
-     *        The manager distinguishes half vs full by DMA HT/TC flags.
+     * @brief Call from HAL_SPI_TxCpltCallback()
      */
     void spi_bus_manager_on_tx_cplt(spi_bus_manager *mgr, SPI_HandleTypeDef *hspi);
 
     /**
-     * @brief Call from HAL_SPI_TxRxCpltCallback() and/or HAL_SPI_TxRxHalfCpltCallback().
+     * @brief Call from HAL_SPI_TxRxCpltCallback()
      */
     void spi_bus_manager_on_txrx_cplt(spi_bus_manager *mgr, SPI_HandleTypeDef *hspi);
+
+    /**
+     * @brief Call from HAL_SPI_TxHalfCpltCallback().
+     */
+    void spi_bus_manager_on_tx_half(spi_bus_manager *mgr, SPI_HandleTypeDef *hspi);
+
+    /**
+     * @brief Call from HAL_SPI_TxRxHalfCpltCallback().
+     */
+    void spi_bus_manager_on_txrx_half(spi_bus_manager *mgr, SPI_HandleTypeDef *hspi);
 
     /**
      * @brief Call from HAL_SPI_ErrorCallback().
@@ -267,9 +276,9 @@ extern "C"
      *
      * // HAL glue (in your stm32xx_it.c or callbacks file):
      * void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)   { spi_bus_manager_on_tx_cplt(&spi_mgr, hspi); }
-     * void HAL_SPI_TxHalfCpltCallback(SPI_HandleTypeDef *h)  { spi_bus_manager_on_tx_cplt(&spi_mgr, h); }
+     * void HAL_SPI_TxHalfCpltCallback(SPI_HandleTypeDef *h)  { spi_bus_manager_on_tx_half(&spi_mgr, h); }
      * void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi) { spi_bus_manager_on_txrx_cplt(&spi_mgr, hspi); }
-     * void HAL_SPI_TxRxHalfCpltCallback(SPI_HandleTypeDef *h){ spi_bus_manager_on_txrx_cplt(&spi_mgr, h); }
+     * void HAL_SPI_TxRxHalfCpltCallback(SPI_HandleTypeDef *h){ spi_bus_manager_on_txrx_half(&spi_mgr, h); }
      * void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)    { spi_bus_manager_on_error(&spi_mgr, hspi); }
      *
      * Notes:
