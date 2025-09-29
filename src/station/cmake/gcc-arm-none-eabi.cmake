@@ -43,5 +43,5 @@ set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--print-memory-usage")
 set(TOOLCHAIN_LINK_LIBRARIES "m")
 
 # === LVGL
-set(LV_CONF_PATH ${CMAKE_SOURCE_DIR}/3rdParty/inc/lv_conf.h)
-set(LV_BUILD_CONF_PATH ${CMAKE_SOURCE_DIR}/3rdParty/inc/lv_conf.h)
+set(LV_CONF_PATH ${CMAKE_SOURCE_DIR}/Core/Inc/lv_conf.h)
+set(LV_BUILD_CONF_PATH ${CMAKE_SOURCE_DIR}/Core/Inc/lv_conf.h)

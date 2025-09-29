@@ -43,9 +43,17 @@ set(CONFIG_LV_BUILD_DEMOS OFF)
 set(CONFIG_LV_BUILD_EXAMPLES OFF)
 set(CONFIG_LV_USE_THORVG_INTERNAL OFF)
 
-# Dodaj podprojekt LVGL (katalog 'lvgl' w repo)
-# To zbuduje target biblioteczny 'lvgl'
-add_subdirectory(${CMAKE_SOURCE_DIR}/3rdParty/mirrors/lvgl)
+# LVGL
+add_subdirectory(
+  ${CMAKE_CURRENT_SOURCE_DIR}/../3rd-party/submodules/lvgl
+  ${CMAKE_CURRENT_BINARY_DIR}/_lvgl
+)
+
+# Shared
+add_subdirectory(
+  ${CMAKE_CURRENT_SOURCE_DIR}/../shared 
+  ${CMAKE_CURRENT_BINARY_DIR}/_shared
+)
 
 # Link directories setup
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
@@ -76,7 +84,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-    ${CMAKE_SOURCE_DIR}/3rdParty/inc
+    ${CMAKE_SOURCE_DIR}/../3rd-party/inc
     # Add user defined include paths
 )
 
@@ -92,6 +100,7 @@ list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)
 target_link_libraries(${CMAKE_PROJECT_NAME}
     stm32cubemx
     lvgl
+    shared
     # Add user defined libraries
 )
 

@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../3rd-party"
+		},
+		{
+			"path": "../shared"
+		}
+	],
+	"settings": {}
+}
