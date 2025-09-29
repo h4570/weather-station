@@ -1,13 +1,32 @@
 #include "app/app.h"
 #include "app/display.h"
 #include "app/sensor.h"
+#include "stdlib.h"
+#include <math.h>
 
 static bool check_if_anything_changed_locally(app_handle *handle)
 {
-    if (handle->local.temperature != handle->last_local.temperature ||
-        handle->local.humidity != handle->last_local.humidity ||
-        handle->local.pressure != handle->last_local.pressure ||
-        handle->local.bat_in != handle->last_local.bat_in)
+    const float temp_threshold = 0.5F; // degrees Celsius
+    const float hum_threshold = 1.0F;  // percentage
+    const int32_t pres_threshold = 10; // Pascals
+    const int32_t bat_threshold = 100; // millivolts
+
+    if (fabsf(handle->local.temperature - handle->last_local.temperature) >= temp_threshold)
+    {
+        return true;
+    }
+
+    if (fabsf(handle->local.humidity - handle->last_local.humidity) >= hum_threshold)
+    {
+        return true;
+    }
+
+    if (abs(handle->local.pressure - handle->last_local.pressure) >= pres_threshold)
+    {
+        return true;
+    }
+
+    if (abs(handle->local.bat_in - handle->last_local.bat_in) >= bat_threshold)
     {
         return true;
     }
