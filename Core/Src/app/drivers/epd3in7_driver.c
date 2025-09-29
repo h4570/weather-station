@@ -9,6 +9,7 @@
 
 #include "app/drivers/epd3in7_driver.h"
 #include "string.h"
+#include "assert.h"
 
 #define EPD3IN7_DRIVER_TRY(expr)           \
     do                                     \
@@ -840,4 +841,321 @@ epd3in7_driver_status epd3in7_driver_display_1_gray_top(epd3in7_driver_handle *h
 fail:
     epd3in7_driver_send_end(handle);
     return err;
+}
+
+// === DMA / SPI BUS MANAGER IMPLEMENTATION ===
+
+// Command and data bytes for DMA transactions.
+// These are used to build spi_bus_transaction objects.
+
+uint8_t epd3in7_driver_dma_ramx_start_end_payload[] = {0x00, 0x00, 0x17, 0x01};
+uint8_t epd3in7_driver_dma_ramy_start_end_payload[] = {0x00, 0x00, 0xDF, 0x01};
+uint8_t epd3in7_driver_dma_ramx_counter_payload = 0x00;
+uint8_t epd3in7_driver_dma_ramy_counter_payload[] = {0x00, 0x00};
+uint8_t epd3in7_driver_dma_ramx_start_end = EPD_CMD_SET_RAMX_START_END;
+uint8_t epd3in7_driver_dma_ramy_start_end = EPD_CMD_SET_RAMY_START_END;
+uint8_t epd3in7_driver_dma_ramx_counter = EPD_CMD_SET_RAMX_COUNTER;
+uint8_t epd3in7_driver_dma_ramy_counter = EPD_CMD_SET_RAMY_COUNTER;
+uint8_t epd3in7_driver_dma_write_ram = EPD_CMD_WRITE_RAM; // 0x24
+uint8_t epd3in7_driver_dma_display_update = EPD_CMD_DISPLAY_UPDATE_SEQUENCE;
+uint8_t epd3in7_driver_dma_cmd_lut = EPD_CMD_WRITE_LUT_REGISTER;
+uint8_t epd3in7_driver_dma_sleep_deep = EPD3IN7_DRIVER_SLEEP_DEEP;
+uint8_t epd3in7_driver_dma_sleep = EPD_CMD_SLEEP;
+uint8_t epd3in7_driver_dma_power_off = EPD_CMD_POWEROFF;
+uint8_t epd3in7_driver_dma_sleep2 = EPD_CMD_SLEEP2;
+
+/* Wait predicate: returns true when the panel is ready (BUSY de-asserted). */
+static bool epd3in7_wait_ready_predicate(void *user)
+{
+    epd3in7_driver_handle *h = (epd3in7_driver_handle *)user;
+    GPIO_PinState s = HAL_GPIO_ReadPin(h->pins.busy_port, h->pins.busy_pin);
+    /* BUSY polarity: active high -> ready when LOW; active low -> ready when HIGH */
+    if (h->busy_active_high)
+    {
+        return (s == GPIO_PIN_RESET);
+    }
+    else
+    {
+        return (s == GPIO_PIN_SET);
+    }
+}
+
+/* Build a "single byte command" transaction. */
+static spi_bus_transaction epd_tx_cmd(epd3in7_driver_handle *h,
+                                      spi_bus_gpio cs, spi_bus_gpio dc,
+                                      uint8_t *cmd)
+{
+    spi_bus_transaction t = {0};
+    t.cs = cs;
+    t.dc = dc;
+    t.dc_mode = SPI_BUS_DC_COMMAND;
+    /* Keep current CR1/CR2 as-is (SPI already configured for this device) */
+    t.cr1 = h->spi_handle->Instance->CR1;
+    t.cr2 = h->spi_handle->Instance->CR2;
+    t.tx = cmd;
+    t.rx = NULL;
+    t.len = 1;
+    t.dir = SPI_BUS_DIR_TX;
+    t.spi_timeout = HAL_MAX_DELAY;
+    t.wait_ready = NULL;
+    t.wait_timeout_ms = 0;
+    t.on_done = NULL;
+    t.on_half = NULL;
+    t.on_error = NULL;
+    t.user = NULL;
+    return t;
+}
+
+/* Build a "data block" transaction. Optionally attach a BUSY wait after it. */
+static spi_bus_transaction epd_tx_data(epd3in7_driver_handle *h,
+                                       spi_bus_gpio cs, spi_bus_gpio dc,
+                                       const uint8_t *buf, uint32_t len, bool wait_busy_after)
+{
+    assert(len <= 65535);
+
+    spi_bus_transaction t = {0};
+    t.cs = cs;
+    t.dc = dc;
+    t.dc_mode = SPI_BUS_DC_DATA;
+    t.cr1 = h->spi_handle->Instance->CR1;
+    t.cr2 = h->spi_handle->Instance->CR2;
+    t.tx = buf;
+    t.rx = NULL;
+    t.len = (uint16_t)len; /* If len > 65535, enqueue in chunks before calling this. */
+    t.dir = SPI_BUS_DIR_TX;
+    t.spi_timeout = HAL_MAX_DELAY;
+    t.on_done = NULL;
+    t.on_half = NULL;
+    t.on_error = NULL;
+
+    if (wait_busy_after)
+    {
+        t.wait_ready = epd3in7_wait_ready_predicate;
+        t.wait_timeout_ms = EPD3IN7_DRIVER_BUSY_TIMEOUT;
+        t.user = h;
+    }
+    else
+    {
+        t.wait_ready = NULL;
+        t.wait_timeout_ms = 0;
+        t.user = NULL;
+    }
+
+    return t;
+}
+
+static spi_bus_transaction epd_tx_cmd_wait(epd3in7_driver_handle *h,
+                                           spi_bus_gpio cs, spi_bus_gpio dc,
+                                           uint8_t *cmd, bool wait_busy_after)
+{
+    spi_bus_transaction t = {0};
+    t.cs = cs;
+    t.dc = dc;
+    t.dc_mode = SPI_BUS_DC_COMMAND; // DC=0
+    t.cr1 = h->spi_handle->Instance->CR1;
+    t.cr2 = h->spi_handle->Instance->CR2;
+    t.tx = cmd;
+    t.rx = NULL;
+    t.len = 1;
+    t.dir = SPI_BUS_DIR_TX;
+    t.spi_timeout = HAL_MAX_DELAY;
+
+    if (wait_busy_after)
+    {
+        t.wait_ready = epd3in7_wait_ready_predicate;
+        t.wait_timeout_ms = EPD3IN7_DRIVER_BUSY_TIMEOUT;
+        t.user = h;
+    }
+    else
+    {
+        t.wait_ready = NULL;
+        t.wait_timeout_ms = 0;
+        t.user = NULL;
+    }
+
+    return t;
+}
+
+/* Enqueue small data buffer (command's payload). */
+static spi_bus_transaction epd_tx_payload(epd3in7_driver_handle *h,
+                                          spi_bus_gpio cs, spi_bus_gpio dc,
+                                          const uint8_t *buf, uint16_t len)
+{
+    return epd_tx_data(h, cs, dc, buf, len, false);
+}
+
+/* Enqueue a LUT write (mirrors epd3in7_driver_load_lut, but queue-based). */
+static epd3in7_driver_status epd3in7_enqueue_lut(epd3in7_driver_handle *h,
+                                                 spi_bus_manager *mgr,
+                                                 spi_bus_gpio cs, spi_bus_gpio dc,
+                                                 epd3in7_driver_lut_type lut)
+{
+    if (h->last_lut_has_value && h->last_lut == lut)
+    {
+        return EPD3IN7_DRIVER_OK;
+    }
+
+    const uint8_t *lut_ptr = NULL;
+    if (lut == EPD3IN7_DRIVER_LUT_4_GRAY_GC)
+        lut_ptr = epd3in7_driver_lut_4_gray_gc;
+    else if (lut == EPD3IN7_DRIVER_LUT_1_GRAY_GC)
+        lut_ptr = epd3in7_driver_lut_1_gray_gc;
+    else if (lut == EPD3IN7_DRIVER_LUT_1_GRAY_DU)
+        lut_ptr = epd3in7_driver_lut_1_gray_du;
+    else if (lut == EPD3IN7_DRIVER_LUT_1_GRAY_A2)
+        lut_ptr = epd3in7_driver_lut_1_gray_a2;
+
+    if (!lut_ptr)
+        return EPD3IN7_DRIVER_ERR_PARAM;
+
+    spi_bus_transaction t_cmd = epd_tx_cmd(h, cs, dc, &epd3in7_driver_dma_cmd_lut);
+    if (spi_bus_manager_submit(mgr, &t_cmd) != SPI_BUS_MANAGER_OK)
+        return EPD3IN7_DRIVER_SPI_BUS_ERR;
+
+    spi_bus_transaction t_data = epd_tx_payload(h, cs, dc, lut_ptr, 105);
+    if (spi_bus_manager_submit(mgr, &t_data) != SPI_BUS_MANAGER_OK)
+        return EPD3IN7_DRIVER_SPI_BUS_ERR;
+
+    h->last_lut_has_value = true;
+    h->last_lut = lut;
+    return EPD3IN7_DRIVER_OK;
+}
+
+epd3in7_driver_status epd3in7_driver_display_1_gray_dma(epd3in7_driver_handle *handle,
+                                                        spi_bus_manager *mgr,
+                                                        const uint8_t *image,
+                                                        const epd3in7_driver_mode mode)
+{
+    if (!handle || !mgr || !image)
+        return EPD3IN7_DRIVER_ERR_PARAM;
+
+    /* Prepare GPIO roles for the manager based on driver pins. */
+    spi_bus_gpio cs = {handle->pins.cs_port, handle->pins.cs_pin, true};  /* active low */
+    spi_bus_gpio dc = {handle->pins.dc_port, handle->pins.dc_pin, false}; /* data=HIGH */
+
+    /* Sequence mirrors the blocking epd3in7_driver_display_1_gray() */
+
+    /* SET_RAMX_START_END */
+    {
+        spi_bus_transaction tr = epd_tx_cmd(handle, cs, dc, &epd3in7_driver_dma_ramx_start_end);
+
+        if (spi_bus_manager_submit(mgr, &tr) != SPI_BUS_MANAGER_OK)
+            return EPD3IN7_DRIVER_SPI_BUS_ERR;
+
+        spi_bus_transaction tr2 = epd_tx_payload(handle, cs, dc, epd3in7_driver_dma_ramx_start_end_payload, sizeof(epd3in7_driver_dma_ramx_start_end_payload));
+        if (spi_bus_manager_submit(mgr, &tr2) != SPI_BUS_MANAGER_OK)
+            return EPD3IN7_DRIVER_SPI_BUS_ERR;
+    }
+
+    /* SET_RAMY_START_END */
+    {
+        spi_bus_transaction tr = epd_tx_cmd(handle, cs, dc, &epd3in7_driver_dma_ramy_start_end);
+
+        if (spi_bus_manager_submit(mgr, &tr) != SPI_BUS_MANAGER_OK)
+            return EPD3IN7_DRIVER_SPI_BUS_ERR;
+
+        spi_bus_transaction tr2 = epd_tx_payload(handle, cs, dc, epd3in7_driver_dma_ramy_start_end_payload, sizeof(epd3in7_driver_dma_ramy_start_end_payload));
+        if (spi_bus_manager_submit(mgr, &tr2) != SPI_BUS_MANAGER_OK)
+            return EPD3IN7_DRIVER_SPI_BUS_ERR;
+    }
+
+    /* SET_RAMX/Y_COUNTER */
+    {
+
+        spi_bus_transaction tr = epd_tx_cmd(handle, cs, dc, &epd3in7_driver_dma_ramx_counter);
+        if (spi_bus_manager_submit(mgr, &tr) != SPI_BUS_MANAGER_OK)
+            return EPD3IN7_DRIVER_SPI_BUS_ERR;
+
+        spi_bus_transaction tr2 = epd_tx_payload(handle, cs, dc, &epd3in7_driver_dma_ramx_counter_payload, 1);
+        if (spi_bus_manager_submit(mgr, &tr2) != SPI_BUS_MANAGER_OK)
+            return EPD3IN7_DRIVER_SPI_BUS_ERR;
+
+        spi_bus_transaction tr3 = epd_tx_cmd(handle, cs, dc, &epd3in7_driver_dma_ramy_counter);
+        if (spi_bus_manager_submit(mgr, &tr3) != SPI_BUS_MANAGER_OK)
+            return EPD3IN7_DRIVER_SPI_BUS_ERR;
+
+        spi_bus_transaction tr4 = epd_tx_payload(handle, cs, dc, epd3in7_driver_dma_ramy_counter_payload, 2);
+        if (spi_bus_manager_submit(mgr, &tr4) != SPI_BUS_MANAGER_OK)
+            return EPD3IN7_DRIVER_SPI_BUS_ERR;
+    }
+
+    /* WRITE_RAM + frame data */
+    {
+        spi_bus_transaction tr_cmd = epd_tx_cmd(handle, cs, dc, &epd3in7_driver_dma_write_ram);
+        if (spi_bus_manager_submit(mgr, &tr_cmd) != SPI_BUS_MANAGER_OK)
+            return EPD3IN7_DRIVER_SPI_BUS_ERR;
+
+        const uint16_t image_counter = (uint16_t)(EPD3IN7_WIDTH * EPD3IN7_HEIGHT / 8); // 16800
+        spi_bus_transaction tr_data = epd_tx_data(handle, cs, dc, image, image_counter, false);
+        if (spi_bus_manager_submit(mgr, &tr_data) != SPI_BUS_MANAGER_OK)
+            return EPD3IN7_DRIVER_SPI_BUS_ERR;
+    }
+
+    /* Load LUT for the selected mode. */
+    {
+        epd3in7_driver_lut_type lut_type = epd3in7_driver_mode_to_lut(mode, true);
+        epd3in7_driver_status s = epd3in7_enqueue_lut(handle, mgr, cs, dc, lut_type);
+        if (s != EPD3IN7_DRIVER_OK)
+            return s;
+    }
+
+    /* Display update sequence */
+    {
+        spi_bus_transaction tr = epd_tx_cmd_wait(handle, cs, dc, &epd3in7_driver_dma_display_update, true /* wait BUSY */);
+        if (spi_bus_manager_submit(mgr, &tr) != SPI_BUS_MANAGER_OK)
+            return EPD3IN7_DRIVER_SPI_BUS_ERR;
+    }
+
+    return EPD3IN7_DRIVER_OK;
+}
+
+epd3in7_driver_status epd3in7_driver_sleep_dma(epd3in7_driver_handle *handle,
+                                               spi_bus_manager *mgr,
+                                               const epd3in7_driver_sleep_mode mode)
+{
+    if (!handle || !mgr)
+        return EPD3IN7_DRIVER_ERR_PARAM;
+
+    spi_bus_gpio cs = {handle->pins.cs_port, handle->pins.cs_pin, true};
+    spi_bus_gpio dc = {handle->pins.dc_port, handle->pins.dc_pin, false};
+
+    if (mode == EPD3IN7_DRIVER_SLEEP_DEEP)
+    {
+        uint8_t val = 0x03;
+        spi_bus_transaction tr = epd_tx_cmd(handle, cs, dc, &epd3in7_driver_dma_sleep_deep);
+        if (spi_bus_manager_submit(mgr, &tr) != SPI_BUS_MANAGER_OK)
+            return EPD3IN7_DRIVER_SPI_BUS_ERR;
+
+        spi_bus_transaction tr2 = epd_tx_payload(handle, cs, dc, &val, 1);
+        if (spi_bus_manager_submit(mgr, &tr2) != SPI_BUS_MANAGER_OK)
+            return EPD3IN7_DRIVER_SPI_BUS_ERR;
+        return EPD3IN7_DRIVER_OK;
+    }
+    else
+    {
+        /* Normal sleep sequence mirrors blocking version: SLEEP(0xF7) -> POWEROFF -> SLEEP2(0xA5) */
+        uint8_t v_f7 = 0xF7;
+        spi_bus_transaction tr = epd_tx_cmd(handle, cs, dc, &epd3in7_driver_dma_sleep);
+        if (spi_bus_manager_submit(mgr, &tr) != SPI_BUS_MANAGER_OK)
+            return EPD3IN7_DRIVER_SPI_BUS_ERR;
+
+        spi_bus_transaction tr2 = epd_tx_payload(handle, cs, dc, &v_f7, 1);
+        if (spi_bus_manager_submit(mgr, &tr2) != SPI_BUS_MANAGER_OK)
+            return EPD3IN7_DRIVER_SPI_BUS_ERR;
+
+        spi_bus_transaction tr3 = epd_tx_cmd(handle, cs, dc, &epd3in7_driver_dma_power_off);
+        if (spi_bus_manager_submit(mgr, &tr3) != SPI_BUS_MANAGER_OK)
+            return EPD3IN7_DRIVER_SPI_BUS_ERR;
+
+        uint8_t v_a5 = 0xA5;
+        spi_bus_transaction tr4 = epd_tx_cmd(handle, cs, dc, &epd3in7_driver_dma_sleep2);
+        if (spi_bus_manager_submit(mgr, &tr4) != SPI_BUS_MANAGER_OK)
+            return EPD3IN7_DRIVER_SPI_BUS_ERR;
+
+        spi_bus_transaction tr5 = epd_tx_payload(handle, cs, dc, &v_a5, 1);
+        if (spi_bus_manager_submit(mgr, &tr5) != SPI_BUS_MANAGER_OK)
+            return EPD3IN7_DRIVER_SPI_BUS_ERR;
+
+        return EPD3IN7_DRIVER_OK;
+    }
 }

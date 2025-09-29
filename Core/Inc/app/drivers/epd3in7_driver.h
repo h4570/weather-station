@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include "app/drivers/spi_bus_manager.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -70,7 +71,8 @@ extern "C"
         EPD3IN7_DRIVER_OK = 0,           /**< Operation completed successfully */
         EPD3IN7_DRIVER_ERR_HAL = -1,     /**< HAL error occurred */
         EPD3IN7_DRIVER_ERR_TIMEOUT = -2, /**< Operation timed out */
-        EPD3IN7_DRIVER_ERR_PARAM = -3    /**< Invalid parameter provided */
+        EPD3IN7_DRIVER_ERR_PARAM = -3,   /**< Invalid parameter provided */
+        EPD3IN7_DRIVER_SPI_BUS_ERR = -4, /**< SPI bus manager error */
     } epd3in7_driver_status;
 
     /**
@@ -234,6 +236,31 @@ extern "C"
      * - This function should not be called after epd3in7_driver_clear_1_gray() without a full epd3in7_driver_display_1_gray() in between.
      */
     epd3in7_driver_status epd3in7_driver_display_1_gray_top(epd3in7_driver_handle *handle, const uint8_t *image, const uint16_t y_end_exclusive, const epd3in7_driver_mode mode);
+
+    // === DMA / SPI BUS MANAGER DECLARATIONS ===
+
+    /**
+     * @brief Send the 1-gray level (black & white) image buffer via DMA using spi_bus_manager.
+     *        Non-blocking: the function only enqueues transactions and returns.
+     *
+     * @param handle Driver handle
+     * @param mgr    SPI bus manager (must be configured for the same SPI)
+     * @param image  Pointer to I1 full-frame buffer (size: WIDTH*HEIGHT/8)
+     * @param mode   GC / DU / A2
+     * @return epd3in7_driver_status Operation status (enqueue-time only)
+     */
+    epd3in7_driver_status epd3in7_driver_display_1_gray_dma(epd3in7_driver_handle *handle,
+                                                            spi_bus_manager *mgr,
+                                                            const uint8_t *image,
+                                                            const epd3in7_driver_mode mode);
+
+    /**
+     * @brief Put the display to sleep using DMA transactions (non-blocking).
+     *        Enqueued after display update to protect the panel.
+     */
+    epd3in7_driver_status epd3in7_driver_sleep_dma(epd3in7_driver_handle *handle,
+                                                   spi_bus_manager *mgr,
+                                                   const epd3in7_driver_sleep_mode mode);
 
 #ifdef __cplusplus
 }
