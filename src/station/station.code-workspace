@@ -4,10 +4,10 @@
 			"path": "."
 		},
 		{
-			"path": "../3rd-party"
+			"path": "../shared"
 		},
 		{
-			"path": "../shared"
+			"path": "../3rd-party"
 		}
 	],
 	"settings": {}
