@@ -1,7 +1,7 @@
 #pragma once
 
 #include "app/drivers/epd3in7_driver.h"
-#include "app/drivers/spi_bus_manager.h"
+#include "shared/drivers/spi_bus_manager.h"
 #include "lvgl/lvgl.h"
 #include <stddef.h>
 #include <stdbool.h>

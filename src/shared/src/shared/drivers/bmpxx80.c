@@ -10,7 +10,6 @@
  */
 
 #include "shared/drivers/bmpxx80.h"
-#include "app/drivers/bmpxx80_glue.h"
 #include "math.h"
 
 GPIO_TypeDef *BMPxx_cs_port;

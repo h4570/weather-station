@@ -1,7 +1,6 @@
 #pragma once
 
-#include "stm32g4xx_hal.h"
-#include "stm32g4xx_hal_gpio.h"
+#include "app/shared_glue/spi_bus_manager_glue.h"
 #include <stdint.h>
 #include <stdbool.h>
 

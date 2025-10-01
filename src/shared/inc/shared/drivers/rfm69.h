@@ -1,7 +1,7 @@
 #ifndef RFM69_H
 #define RFM69_H
 
-#include "stm32g4xx_hal.h"
+#include "app/shared_glue/rfm69_glue.h"
 #include <stdint.h>
 #include <stdbool.h>
 #include "rfm69_registers.h"

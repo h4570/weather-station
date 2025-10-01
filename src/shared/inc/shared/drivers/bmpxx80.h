@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include "app/drivers/bmpxx80_glue.h"
+#include "app/shared_glue/bmpxx80_glue.h"
 
 #ifdef __cplusplus
 extern "C"

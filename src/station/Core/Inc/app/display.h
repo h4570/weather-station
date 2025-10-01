@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "app/station_data.h"
-#include "app/drivers/spi_bus_manager.h"
+#include "shared/drivers/spi_bus_manager.h"
 
 #ifdef __cplusplus
 extern "C"

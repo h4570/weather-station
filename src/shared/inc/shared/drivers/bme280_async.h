@@ -1,8 +1,8 @@
 #pragma once
 #include <stdint.h>
 #include <stdbool.h>
-#include "stm32g4xx_hal.h"
-#include "app/drivers/spi_bus_manager.h"
+#include "app/shared_glue/bme280_async_glue.h"
+#include "shared/drivers/spi_bus_manager.h"
 #include "shared/drivers/bmpxx80.h"
 
 #ifdef __cplusplus

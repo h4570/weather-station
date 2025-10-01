@@ -10,5 +10,17 @@
 			"path": "../3rd-party"
 		}
 	],
-	"settings": {}
+	"settings": {
+		"files.associations": {
+			"stdbool.h": "c",
+			"spi_bus_manager.h": "c",
+			"stdint.h": "c",
+			"stm32g4xx_hal.h": "c",
+			"bme280_async_glue.h": "c",
+			"rfm69_glue.h": "c",
+			"spi_bus_manager_glue.h": "c",
+			"math.h": "c",
+			"bmpxx80.h": "c"
+		}
+	}
 }

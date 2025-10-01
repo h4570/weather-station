@@ -1,4 +1,4 @@
-#include "app/drivers/spi_bus_manager.h"
+#include "shared/drivers/spi_bus_manager.h"
 #include <string.h>
 
 #if SPI_BUS_MANAGER_DEBUG

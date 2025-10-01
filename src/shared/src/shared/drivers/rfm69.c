@@ -1,4 +1,4 @@
-#include "app/drivers/rfm69.h"
+#include "shared/drivers/rfm69.h"
 #include <string.h>
 #include <math.h>
 

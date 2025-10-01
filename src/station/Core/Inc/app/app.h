@@ -7,7 +7,7 @@
 #include "app/battery.h"
 #include "app/radio.h"
 #include "app/sensor.h"
-#include "app/drivers/spi_bus_manager.h"
+#include "shared/drivers/spi_bus_manager.h"
 
 #include "stm32g4xx_hal.h"
 #include "adc.h"

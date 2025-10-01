@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "app/station_data.h"
-#include "app/drivers/bme280_async.h"
+#include "shared/drivers/bme280_async.h"
 
 #ifdef __cplusplus
 extern "C"

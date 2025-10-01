@@ -1,5 +1,5 @@
 #include "app/radio.h"
-#include "app/drivers/rfm69.h"
+#include "shared/drivers/rfm69.h"
 
 static RFM69_HandleTypeDef radio_rfm69_handle;
 static volatile uint16_t radio_it_di0_pin = 0;

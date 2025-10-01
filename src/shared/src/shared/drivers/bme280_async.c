@@ -1,5 +1,4 @@
-#include "app/drivers/bme280_async.h"
-#include "stm32g4xx_hal.h"
+#include "shared/drivers/bme280_async.h"
 #include <string.h>
 
 /* ---------------- Reuse danych kalibracyjnych z bmpxx80.c ----------------
