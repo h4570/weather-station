@@ -9,10 +9,8 @@
  *
  */
 
-#include "stm32g4xx_hal.h"
-#include "gpio.h"
-#include "app/drivers/bmpxx80.h"
-#include "tim.h"
+#include "shared/drivers/bmpxx80.h"
+#include "app/drivers/bmpxx80_glue.h"
 #include "math.h"
 
 GPIO_TypeDef *BMPxx_cs_port;
@@ -20,9 +18,8 @@ uint16_t BMPxx_cs_pin;
 
 static void BMPxx_delay_us(uint16_t us)
 {
-    // Nucleo G47xx - 170MHz | Prescaler 169, Counter period 9999 -> 1us
-    htim1.Instance->CNT = 0;
-    while (htim1.Instance->CNT <= us)
+    bmpxx80_1_us_timer->Instance->CNT = 0;
+    while (bmpxx80_1_us_timer->Instance->CNT <= us)
         ;
 }
 

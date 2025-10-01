@@ -49,12 +49,6 @@ add_subdirectory(
   ${CMAKE_CURRENT_BINARY_DIR}/_lvgl
 )
 
-# Shared
-add_subdirectory(
-  ${CMAKE_CURRENT_SOURCE_DIR}/../shared 
-  ${CMAKE_CURRENT_BINARY_DIR}/_shared
-)
-
 # Link directories setup
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined library search paths
@@ -64,7 +58,7 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     Core/Src/app/drivers/bme280_async.c
-    Core/Src/app/drivers/bmpxx80.c
+    Core/Src/app/drivers/bmpxx80_glue.c
     Core/Src/app/drivers/epd3in7_driver.c
     Core/Src/app/drivers/epd3in7_lvgl_adapter.c
     Core/Src/app/drivers/rfm69.c
@@ -80,12 +74,16 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/app/radio.c
     Core/Src/app/renderer.c
     Core/Src/app/sensor.c
+
+    ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/shared/drivers/bmpxx80.c 
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-    ${CMAKE_SOURCE_DIR}/../3rd-party/inc
     # Add user defined include paths
+    ${CMAKE_SOURCE_DIR}/../3rd-party/inc
+
+    ${CMAKE_CURRENT_SOURCE_DIR}/../shared/inc 
 )
 
 # Add project symbols (macros)
@@ -100,7 +98,6 @@ list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)
 target_link_libraries(${CMAKE_PROJECT_NAME}
     stm32cubemx
     lvgl
-    shared
     # Add user defined libraries
 )
 

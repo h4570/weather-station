@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include "stm32g4xx_hal.h"
 #include "app/drivers/spi_bus_manager.h"
-#include "app/drivers/bmpxx80.h"
+#include "shared/drivers/bmpxx80.h"
 
 #ifdef __cplusplus
 extern "C"

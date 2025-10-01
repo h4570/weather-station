@@ -42,20 +42,18 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined library search paths
 )
 
-# Shared
-add_subdirectory(
-  ${CMAKE_CURRENT_SOURCE_DIR}/../shared 
-  ${CMAKE_CURRENT_BINARY_DIR}/_shared
-)
-
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
+    Core/Src/app/drivers/bmpxx80_glue.c
+    
+    ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/shared/drivers/bmpxx80.c 
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
+    ${CMAKE_CURRENT_SOURCE_DIR}/../shared/inc 
 )
 
 # Add project symbols (macros)
@@ -69,7 +67,5 @@ list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)
 # Add linked libraries
 target_link_libraries(${CMAKE_PROJECT_NAME}
     stm32cubemx
-    shared
-
     # Add user defined libraries
 )
