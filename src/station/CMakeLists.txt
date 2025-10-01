@@ -65,17 +65,17 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/app/fonts/lv_font_opensans_regular_24.c
     Core/Src/app/fonts/lv_font_opensans_thin_14.c
     Core/Src/app/app.c
-    Core/Src/app/battery.c
     Core/Src/app/display.c
-    Core/Src/app/hourly_clock.c
     Core/Src/app/radio.c
     Core/Src/app/renderer.c
-    Core/Src/app/sensor.c
 
     ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/shared/drivers/bme280_async.c 
     ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/shared/drivers/bmpxx80.c 
     ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/shared/drivers/rfm69.c 
     ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/shared/drivers/spi_bus_manager.c 
+    ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/shared/battery.c 
+    ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/shared/hourly_clock.c 
+    ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/shared/sensor.c 
 )
 
 # Add include paths

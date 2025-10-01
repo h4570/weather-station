@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "app/station_data.h"
+#include "shared/app_device_data.h"
 #include "shared/drivers/spi_bus_manager.h"
 
 #ifdef __cplusplus
@@ -39,7 +39,7 @@ extern "C"
      * @param remote Pointer to the remote station data (can be NULL if not used)
      * @param changes_detected Flag indicating if any changes were detected that require a display update
      */
-    void display_loop(display_handle *handle, station_data *local, station_data *remote, const bool changes_detected);
+    void display_loop(display_handle *handle, app_device_data *local, app_device_data *remote, const bool changes_detected);
 
 #ifdef __cplusplus
 }

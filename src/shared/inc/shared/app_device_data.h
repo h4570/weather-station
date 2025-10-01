@@ -16,7 +16,7 @@ extern "C"
         float humidity;    /**< Humidity in percentage */
         int32_t pressure;  /**< Pressure in Pascals */
         int32_t bat_in;    /**< Battery input in millivolts */
-    } station_data;
+    } app_device_data;
 
 #ifdef __cplusplus
 }

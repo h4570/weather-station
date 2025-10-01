@@ -19,12 +19,13 @@ extern "C"
         uint16_t current_bat_level;       /**< Current battery level percentage (0-100%) */
         uint16_t last_returned_bat_level; /**< Last returned battery level percentage (0-100%) */
         float temperature;                /**< Current temperature in degrees Celsius for temperature compensation */
+        ADC_HandleTypeDef *battery_adc;   /**< Pointer to the ADC handle used for battery voltage measurement */
     } battery_handle;
 
     /**
      * @brief Create and return a new battery handle
      */
-    battery_handle battery_create();
+    battery_handle battery_create(ADC_HandleTypeDef *battery_adc);
 
     /**
      * @brief Refresh the battery measurement system (check if new ADC value from interrupt is available)

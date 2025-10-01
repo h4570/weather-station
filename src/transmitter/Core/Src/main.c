@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "adc.h"
 #include "dma.h"
 #include "rtc.h"
 #include "spi.h"
@@ -27,7 +28,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
-#include "shared/drivers/bmpxx80.h"
+#include "app/app.h"
+#include <string.h>
 
 /* USER CODE END Includes */
 
@@ -49,6 +51,8 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+
+app_handle app;
 
 /* USER CODE END PV */
 
@@ -96,15 +100,21 @@ int main(void)
   MX_RTC_Init();
   MX_SPI1_Init();
   MX_TIM2_Init();
+  MX_ADC_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+
+  memset(&app, 0, sizeof(app));
+  app_init(&app);
+
   while (1)
   {
-    HAL_Delay(2);
+    app_loop(&app);
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -161,6 +171,41 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
+{
+  app_adc_conv_cplt_callback(&app, hadc);
+}
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  app_gpio_exti_callback(&app, GPIO_Pin);
+}
+
+void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
+{
+  app_spi_tx_cplt_callback(&app, hspi);
+}
+
+void HAL_SPI_TxHalfCpltCallback(SPI_HandleTypeDef *hspi)
+{
+  app_spi_tx_half_cplt_callback(&app, hspi);
+}
+
+void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
+{
+  app_spi_txrx_cplt_callback(&app, hspi);
+}
+
+void HAL_SPI_TxRxHalfCpltCallback(SPI_HandleTypeDef *hspi)
+{
+  app_spi_txrx_half_cplt_callback(&app, hspi);
+}
+
+void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
+{
+  app_spi_error_callback(&app, hspi);
+}
 
 /* USER CODE END 4 */
 

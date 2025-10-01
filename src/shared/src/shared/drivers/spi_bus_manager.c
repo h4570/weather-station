@@ -96,6 +96,32 @@ void spi_dbg_mark(const char *tag)
 
 /* ------------------------- Internal helpers/macros ------------------------- */
 
+/* Portable DS mask across STM32 families */
+#ifndef SPI_DS_MASK
+#if defined(SPI_CR2_DS_Msk)
+// L0/L4/L5/H7 style headers: direct mask is provided
+#define SPI_DS_MASK SPI_CR2_DS_Msk
+#elif defined(SPI_CR2_DS_Pos)
+// Older headers provide only position
+#define SPI_DS_MASK (0xFUL << SPI_CR2_DS_Pos)
+#else
+// No DS in this family (very old F1-style) -> force compile error where used
+#define SPI_DS_MASK 0u
+#endif
+#endif
+
+static inline bool spi_is_16bit(uint32_t cr2)
+{
+#if defined(SPI_CR2_DS_Pos)
+    // Extract the DS field (4 bits) and check against 0xF (16-bit mode)
+    uint32_t ds = (cr2 & SPI_CR2_DS_Msk) >> SPI_CR2_DS_Pos;
+    return (ds + 1u) == 16u;
+#else
+    // Fallback for families without DS
+    return false;
+#endif
+}
+
 #define SPI_Q_INCR(i, cap) (uint16_t)(((i) + 1) % (cap))
 #define SPI_Q_EMPTY(m) ((m)->q_head == (m)->q_tail)
 #define SPI_Q_FULL(m) (SPI_Q_INCR((m)->q_tail, (m)->q_capacity) == (m)->q_head)
@@ -213,8 +239,7 @@ static void spi_bus_try_start(spi_bus_manager *mgr)
 
     spi_dbg_log("start tx head=%u dir=%d len=%u dc_mode=%d cs.port=%p ds=%s\n",
                 mgr->q_head, (int)t->dir, (unsigned)t->len, (int)t->dc_mode,
-                (void *)t->cs.port,
-                ((t->cr2 & SPI_CR2_DS) == SPI_DATASIZE_16BIT) ? "16" : "8");
+                (void *)t->cs.port, spi_is_16bit(t->cr2) ? "16" : "8");
 
     /* Apply SPI registers quickly */
     spi_bus_apply_regs(mgr->spi->Instance, t->cr1, t->cr2);
@@ -226,7 +251,7 @@ static void spi_bus_try_start(spi_bus_manager *mgr)
     /* Clean DCache for TX if enabled */
     if (mgr->clean_dcache_before_tx && t->tx && t->len)
     {
-        size_t bytes = (size_t)t->len * (((t->cr2 & SPI_CR2_DS) == SPI_DATASIZE_16BIT) ? 2u : 1u);
+        size_t bytes = (size_t)t->len * (spi_is_16bit(t->cr2) ? 2u : 1u);
         spi_bus_clean_dcache_region(t->tx, bytes);
     }
 

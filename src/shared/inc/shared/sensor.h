@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "app/station_data.h"
+#include "shared/app_device_data.h"
 #include "shared/drivers/bme280_async.h"
 
 #ifdef __cplusplus
@@ -15,14 +15,18 @@ extern "C"
      */
     typedef struct
     {
-        spi_bus_manager *spi_mgr;
-        bme280_async bme_async;
+        spi_bus_manager *spi_mgr;      /**< SPI bus manager for communication */
+        bme280_async bme_async;        /**< Asynchronous BME280 handler */
+        TIM_HandleTypeDef *sensor_tim; /**< Timer handle for microsecond delays */
+        SPI_HandleTypeDef *sensor_spi; /**< SPI handle for BME280 communication */
+        GPIO_TypeDef *cs_port;         /**< GPIO port for chip select */
+        uint16_t cs_pin;               /**< GPIO pin for chip select */
     } sensor_handle;
 
     /**
      * @brief Create and initialize a sensor handle
      */
-    sensor_handle sensor_create(spi_bus_manager *spi_mgr);
+    sensor_handle sensor_create(spi_bus_manager *spi_mgr, TIM_HandleTypeDef *sensor_tim, SPI_HandleTypeDef *sensor_spi, GPIO_TypeDef *cs_port, uint16_t cs_pin);
 
     /**
      * @brief Initialize the sensor (BME280)
@@ -39,10 +43,10 @@ extern "C"
     /**
      * @brief Try to get the latest sensor readings if available.
      *
-     * @param out Pointer to station_data structure to fill with the latest readings
+     * @param out Pointer to app_device_data structure to fill with the latest readings
      * @return true if new data was available and copied to out, false otherwise
      */
-    bool sensor_try_get(sensor_handle *handle, station_data *out);
+    bool sensor_try_get(sensor_handle *handle, app_device_data *out);
 
 #ifdef __cplusplus
 }

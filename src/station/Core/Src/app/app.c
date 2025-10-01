@@ -1,6 +1,4 @@
 #include "app/app.h"
-#include "app/display.h"
-#include "app/sensor.h"
 #include "stdlib.h"
 #include <math.h>
 
@@ -42,37 +40,20 @@ static void update_last_local_data(app_handle *handle)
     handle->last_local.bat_in = handle->local.bat_in;
 }
 
-static void init_station_data(station_data *data)
-{
-    data->temperature = 0;
-    data->humidity = 0;
-    data->pressure = 0;
-    data->bat_in = 0;
-}
-
 void app_init(app_handle *handle)
 {
-    handle->battery = battery_create();
+    handle->battery = battery_create(&hadc1);
     handle->hclock = hourly_clock_create(&hrtc);
     handle->radio = radio_create(RAD_CS_GPIO_Port, RAD_CS_Pin, RAD_DIO0_GPIO_Port, RAD_DIO0_Pin, &hspi3);
     handle->spi_mgr = spi_bus_manager_create(&hspi2, handle->app_spiq_storage, (uint16_t)(sizeof(handle->app_spiq_storage) / sizeof(handle->app_spiq_storage[0])));
-    handle->sensor = sensor_create(&handle->spi_mgr);
+    handle->sensor = sensor_create(&handle->spi_mgr, &htim1, &hspi2, BME280_CS_GPIO_Port, BME280_CS_Pin);
     handle->display = display_create(&handle->spi_mgr);
-
-    init_station_data(&handle->local);
-    init_station_data(&handle->remote);
-    init_station_data(&handle->last_local);
-    init_station_data(&handle->last_remote);
-
-    handle->last_sensor_read_time = 0;
-    handle->last_battery_read_time = 0;
-    handle->last_check_changes_time = 0;
 
     display_init(&handle->display);
 
     sensor_init(&handle->sensor);
 
-    // battery_request_read(&handle->battery);
+    battery_request_read(&handle->battery);
 
     // radio_init(&handle->radio);
 
@@ -112,18 +93,18 @@ void app_loop(app_handle *handle)
         battery_update_temperature(&handle->battery, handle->local.temperature);
     }
 
-    // if (hourly_clock_check_elapsed(&handle->hclock, handle->last_battery_read_time, BATTERY_CHECK_EVERY_SEC))
-    // {
-    //     battery_refresh(&handle->battery);
+    if (hourly_clock_check_elapsed(&handle->hclock, handle->last_battery_read_time, BATTERY_CHECK_EVERY_SEC))
+    {
+        battery_refresh(&handle->battery);
 
-    //     if (battery_check_if_level_changed(&handle->battery))
-    //     {
-    //         handle->local.bat_in = battery_get_level(&handle->battery);
-    //     }
+        if (battery_check_if_level_changed(&handle->battery))
+        {
+            handle->local.bat_in = battery_get_level(&handle->battery);
+        }
 
-    //     battery_request_read(&handle->battery);
-    //     handle->last_battery_read_time = hourly_clock_get_timestamp(&handle->hclock);
-    // }
+        battery_request_read(&handle->battery);
+        handle->last_battery_read_time = hourly_clock_get_timestamp(&handle->hclock);
+    }
 
     bool changes_detected = false;
 

@@ -1,4 +1,4 @@
-#include "app/hourly_clock.h"
+#include "shared/hourly_clock.h"
 
 hourly_clock_handle hourly_clock_create(RTC_HandleTypeDef *hrtc)
 {

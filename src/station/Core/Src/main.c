@@ -29,6 +29,7 @@
 /* USER CODE BEGIN Includes */
 
 #include "app/app.h"
+#include <string.h>
 
 /* USER CODE END Includes */
 
@@ -127,6 +128,7 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
+  memset(&app, 0, sizeof(app));
   app_init(&app);
 
   while (1)

@@ -1,4 +1,4 @@
-#include "app/battery.h"
+#include "shared/battery.h"
 
 volatile uint16_t battery_vcc_adc_value;
 
@@ -82,7 +82,7 @@ static float battery_nimh_calc_get_voltage_for_soc(uint32_t bat_vcc_adc_value, f
     return battery_voltage;
 }
 
-battery_handle battery_create()
+battery_handle battery_create(ADC_HandleTypeDef *battery_adc)
 {
     battery_handle handle;
 
@@ -91,13 +91,14 @@ battery_handle battery_create()
     handle.last_returned_bat_level = 0;
     handle.current_bat_level = 0;
     handle.temperature = 20.0f; // default
+    handle.battery_adc = battery_adc;
 
     return handle;
 }
 
 void battery_request_read(battery_handle *handle)
 {
-    HAL_ADC_Start_IT(&hadc1);
+    HAL_ADC_Start_IT(handle->battery_adc);
 }
 
 void battery_refresh(battery_handle *handle)

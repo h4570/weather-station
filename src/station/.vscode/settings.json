@@ -46,7 +46,7 @@
         "tim.h": "c",
         "display.h": "c",
         "sensor.h": "c",
-        "station_data.h": "c",
+        "app_device_data.h": "c",
         "spi.h": "c",
         "battery.h": "c",
         "adc.h": "c",

@@ -7,5 +7,19 @@
 			"path": "../shared"
 		}
 	],
-	"settings": {}
+	"settings": {
+		"files.associations": {
+			"compare": "c",
+			"cstdint": "c",
+			"gpio.h": "c",
+			"battery.h": "c",
+			"spi_bus_manager.h": "c",
+			"spi_bus_manager_glue.h": "c",
+			"bme280_async.h": "c",
+			"app_device_data.h": "c",
+			"sensor.h": "c",
+			"spi.h": "c",
+			"app.h": "c"
+		}
+	}
 }

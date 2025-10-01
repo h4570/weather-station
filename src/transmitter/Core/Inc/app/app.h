@@ -2,14 +2,12 @@
 
 #include <stdint.h>
 
+#include "shared/drivers/spi_bus_manager.h"
 #include "shared/hourly_clock.h"
 #include "shared/battery.h"
 #include "shared/sensor.h"
-#include "app/display.h"
-#include "app/radio.h"
-#include "shared/drivers/spi_bus_manager.h"
 
-#include "stm32g4xx_hal.h"
+#include "stm32l0xx_hal.h"
 #include "adc.h"
 #include "gpio.h"
 #include "rtc.h"
@@ -26,17 +24,14 @@ extern "C"
      */
     typedef struct
     {
-        display_handle display;
         hourly_clock_handle hclock;
         battery_handle battery;
-        radio_handle radio;
         sensor_handle sensor;
         spi_bus_manager spi_mgr;
-        spi_bus_transaction app_spiq_storage[64];
-        app_device_data local, remote, last_local, last_remote;
+        spi_bus_transaction app_spiq_storage[8];
+        app_device_data local, last_local;
         hourly_clock_timestamp_t last_sensor_read_time;
         hourly_clock_timestamp_t last_battery_read_time;
-        hourly_clock_timestamp_t last_check_changes_time;
     } app_handle;
 
     void app_init(app_handle *handle);

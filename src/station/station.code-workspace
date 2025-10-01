@@ -20,7 +20,8 @@
 			"rfm69_glue.h": "c",
 			"spi_bus_manager_glue.h": "c",
 			"math.h": "c",
-			"bmpxx80.h": "c"
+			"bmpxx80.h": "c",
+			"hourly_clock.h": "c"
 		}
 	}
 }
