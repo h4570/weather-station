@@ -14,6 +14,7 @@ extern "C"
 #define RFM69_MAX_DATA_LEN 61
 #define RF69_CSMA_LIMIT_MS 1000
 #define RF69_TX_LIMIT_MS 1000
+#define RF69_TX_TIMEOUT_MS 1000
 #define RF69_FXOSC 32000000UL
 #define RF69_FSTEP 61.03515625 // 32MHz / 2^19
 #define RF69_BROADCAST_ADDR 0
@@ -88,7 +89,7 @@ extern "C"
     int8_t RFM69_SetPowerDBm(RFM69_HandleTypeDef *hrf, int8_t dBm);
 
     bool RFM69_CanSend(RFM69_HandleTypeDef *hrf);
-    void RFM69_Send(RFM69_HandleTypeDef *hrf, uint16_t toAddress, const void *buffer, uint8_t size, bool requestACK);
+    bool RFM69_Send(RFM69_HandleTypeDef *hrf, uint16_t toAddress, const void *buffer, uint8_t size, bool requestACK);
     bool RFM69_SendWithRetry(RFM69_HandleTypeDef *hrf, uint16_t toAddress, const void *buffer, uint8_t size, uint8_t retries, uint8_t retryWaitMs);
     bool RFM69_ReceiveDone(RFM69_HandleTypeDef *hrf);
     bool RFM69_ACKReceived(RFM69_HandleTypeDef *hrf, uint16_t fromNodeID);

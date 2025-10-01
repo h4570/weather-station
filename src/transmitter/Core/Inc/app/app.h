@@ -34,6 +34,7 @@ extern "C"
         app_device_data local, last_local;
         hourly_clock_timestamp_t last_sensor_read_time;
         hourly_clock_timestamp_t last_battery_read_time;
+        hourly_clock_timestamp_t last_radio_send_time;
     } app_handle;
 
     void app_init(app_handle *handle);

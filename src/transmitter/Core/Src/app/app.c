@@ -17,42 +17,51 @@ void app_init(app_handle *handle)
 
     handle->last_sensor_read_time = hourly_clock_get_timestamp(&handle->hclock);
     handle->last_battery_read_time = hourly_clock_get_timestamp(&handle->hclock);
+    handle->last_radio_send_time = hourly_clock_get_timestamp(&handle->hclock);
 }
 
 // // Release
 // #define SENSOR_CHECK_EVERY_SEC 60
 // #define BATTERY_CHECK_EVERY_SEC 600
+// #define RADIO_SEND_EVERY_SEC 600
 
 // Debug
 #define SENSOR_CHECK_EVERY_SEC 2
 #define BATTERY_CHECK_EVERY_SEC 2
+#define RADIO_SEND_EVERY_SEC 2
 
 void app_loop(app_handle *handle)
 {
     hourly_clock_update(&handle->hclock);
     radio_loop(&handle->radio);
-    sensor_try_get(&handle->sensor, &handle->local);
+    // sensor_try_get(&handle->sensor, &handle->local);
 
-    if (hourly_clock_check_elapsed(&handle->hclock, handle->last_sensor_read_time, SENSOR_CHECK_EVERY_SEC))
+    // if (hourly_clock_check_elapsed(&handle->hclock, handle->last_sensor_read_time, SENSOR_CHECK_EVERY_SEC))
+    // {
+    //     sensor_kick(&handle->sensor);
+
+    //     handle->last_sensor_read_time = hourly_clock_get_timestamp(&handle->hclock);
+    //     battery_update_temperature(&handle->battery, handle->local.temperature);
+    // }
+
+    if (hourly_clock_check_elapsed(&handle->hclock, handle->last_sensor_read_time, RADIO_SEND_EVERY_SEC))
     {
-        sensor_kick(&handle->sensor);
-
-        handle->last_sensor_read_time = hourly_clock_get_timestamp(&handle->hclock);
-        battery_update_temperature(&handle->battery, handle->local.temperature);
+        radio_send(&handle->radio, &handle->local);
+        handle->last_radio_send_time = hourly_clock_get_timestamp(&handle->hclock);
     }
 
-    if (hourly_clock_check_elapsed(&handle->hclock, handle->last_battery_read_time, BATTERY_CHECK_EVERY_SEC))
-    {
-        battery_refresh(&handle->battery);
+    // if (hourly_clock_check_elapsed(&handle->hclock, handle->last_battery_read_time, BATTERY_CHECK_EVERY_SEC))
+    // {
+    //     battery_refresh(&handle->battery);
 
-        if (battery_check_if_level_changed(&handle->battery))
-        {
-            handle->local.bat_in = battery_get_level(&handle->battery);
-        }
+    //     if (battery_check_if_level_changed(&handle->battery))
+    //     {
+    //         handle->local.bat_in = battery_get_level(&handle->battery);
+    //     }
 
-        battery_request_read(&handle->battery);
-        handle->last_battery_read_time = hourly_clock_get_timestamp(&handle->hclock);
-    }
+    //     battery_request_read(&handle->battery);
+    //     handle->last_battery_read_time = hourly_clock_get_timestamp(&handle->hclock);
+    // }
 
     HAL_Delay(1);
 }

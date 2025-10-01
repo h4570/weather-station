@@ -46,7 +46,7 @@ void radio_init(radio_handle *handle)
     HAL_GPIO_WritePin(radio_rfm69_handle.cs_port, radio_rfm69_handle.cs_pin, GPIO_PIN_SET);
 
     // start
-    if (!RFM69_Init(&radio_rfm69_handle, /*freqBand*/ 86, /*nodeID*/ 1, /*networkID*/ 42))
+    if (!RFM69_Init(&radio_rfm69_handle, /*freqBand*/ 86, /*nodeID*/ 2, /*networkID*/ 42))
     {
         // błąd inicjalizacji -> obsłuż
         Error_Handler();
@@ -72,12 +72,14 @@ void radio_loop(radio_handle *handle)
         // wróć do RX (ReceiveDone już przerzuca w STANDBY, więc można ręcznie)
         RFM69_SetMode(&radio_rfm69_handle, RF69_MODE_RX);
     }
+}
 
-    // Wysyłka
-    // const char msg[] = "hello";
-    // RFM69_Send(&radio_rfm69_handle, /*toAddress*/ 2, msg, sizeof msg - 1, /*requestACK*/ true);
+void radio_send(radio_handle *handle, const app_device_data *data)
+{
+    const char msg[] = "hello";
+    RFM69_Send(&radio_rfm69_handle, /*toAddress*/ 1, msg, sizeof msg - 1, /*requestACK*/ false);
 
-    // if (RFM69_SendWithRetry(&radio_rfm69_handle, 2, msg, sizeof msg - 1, /*retries*/ 2, /*retryWaitMs*/ 30))
+    // if (RFM69_SendWithRetry(&radio_rfm69_handle, 1, msg, sizeof msg - 1, /*retries*/ 2, /*retryWaitMs*/ 30))
     // {
     //     // sukces
     // }

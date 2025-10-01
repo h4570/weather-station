@@ -21,7 +21,7 @@ void RFM69_WriteReg(RFM69_HandleTypeDef *hrf, uint8_t addr, uint8_t value)
 {
     uint8_t tx[2] = {(uint8_t)(addr | 0x80), value};
     RFM69_Select(hrf);
-    HAL_StatusTypeDef res = HAL_SPI_Transmit(hrf->hspi, tx, 2, HAL_MAX_DELAY);
+    HAL_SPI_Transmit(hrf->hspi, tx, 2, HAL_MAX_DELAY);
     RFM69_Unselect(hrf);
 }
 
@@ -254,7 +254,7 @@ bool RFM69_CanSend(RFM69_HandleTypeDef *hrf)
     return false;
 }
 
-static void RFM69_SendFrame(RFM69_HandleTypeDef *hrf, uint16_t to, const void *buf, uint8_t len, bool reqACK, bool sendACK)
+static bool RFM69_SendFrame(RFM69_HandleTypeDef *hrf, uint16_t to, const void *buf, uint8_t len, bool reqACK, bool sendACK)
 {
     if (len > RFM69_MAX_DATA_LEN)
         len = RFM69_MAX_DATA_LEN;
@@ -288,12 +288,20 @@ static void RFM69_SendFrame(RFM69_HandleTypeDef *hrf, uint16_t to, const void *b
     RFM69_Unselect(hrf);
 
     RFM69_SetMode(hrf, RF69_MODE_TX);
+    uint32_t txStart = HAL_GetTick();
     while ((RFM69_ReadReg(hrf, REG_IRQFLAGS2) & RF_IRQFLAGS2_PACKETSENT) == 0)
-        ;
+    {
+        if ((HAL_GetTick() - txStart) >= RF69_TX_TIMEOUT_MS)
+        {
+            RFM69_SetMode(hrf, RF69_MODE_STANDBY);
+            return false;
+        }
+    }
     RFM69_SetMode(hrf, RF69_MODE_STANDBY);
+    return true;
 }
 
-void RFM69_Send(RFM69_HandleTypeDef *hrf, uint16_t to, const void *buf, uint8_t len, bool requestACK)
+bool RFM69_Send(RFM69_HandleTypeDef *hrf, uint16_t to, const void *buf, uint8_t len, bool requestACK)
 {
     uint32_t start = HAL_GetTick();
     // rozwiąż RX deadlock
@@ -304,14 +312,15 @@ void RFM69_Send(RFM69_HandleTypeDef *hrf, uint16_t to, const void *buf, uint8_t 
     {
         (void)RFM69_ReceiveDone(hrf); // pompka
     }
-    RFM69_SendFrame(hrf, to, buf, len, requestACK, false);
+    return RFM69_SendFrame(hrf, to, buf, len, requestACK, false);
 }
 
 bool RFM69_SendWithRetry(RFM69_HandleTypeDef *hrf, uint16_t to, const void *buf, uint8_t len, uint8_t retries, uint8_t retryWaitMs)
 {
     for (uint8_t i = 0; i <= retries; i++)
     {
-        RFM69_Send(hrf, to, buf, len, true);
+        if (!RFM69_Send(hrf, to, buf, len, true))
+            continue; // timeout podczas wysyłania, spróbuj ponownie
         uint32_t t0 = HAL_GetTick();
         while ((HAL_GetTick() - t0) < retryWaitMs)
         {
@@ -342,7 +351,7 @@ void RFM69_SendACK(RFM69_HandleTypeDef *hrf, const void *buf, uint8_t len)
         (void)RFM69_ReceiveDone(hrf);
     }
     hrf->SENDERID = sender;
-    RFM69_SendFrame(hrf, sender, buf, len, false, true);
+    (void)RFM69_SendFrame(hrf, sender, buf, len, false, true); // ignoruj wynik dla ACK
     hrf->RSSI = rssi;
 }
 
