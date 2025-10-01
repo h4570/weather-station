@@ -60,6 +60,7 @@ void radio_init(radio_handle *handle)
 
 void radio_loop(radio_handle *handle)
 {
+    // Jest prawie dobrze, transmitter nadaje, ale nie dostajemy przerrwania (ale umiemy odebrać)
     if (RFM69_ReceiveDone(&radio_rfm69_handle))
     {
         // dane w radio_rfm69_handle.DATA (radio_rfm69_handle.DATALEN bajtów)

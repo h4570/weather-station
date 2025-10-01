@@ -55,7 +55,11 @@ void radio_init(radio_handle *handle)
     radio_it_di0_pin = handle->dio0_pin;
 
     // przykładowa moc
-    RFM69_SetPowerDBm(&radio_rfm69_handle, 13);
+    RFM69_SetPowerDBm(&radio_rfm69_handle, 7);
+
+    // To warto zassertować
+    // uint8_t v = RFM69_GetVersion(&radio_rfm69_handle);
+    // uint32_t freq = RFM69_GetFrequency(&radio_rfm69_handle);
 }
 
 void radio_loop(radio_handle *handle)
@@ -76,7 +80,15 @@ void radio_loop(radio_handle *handle)
 
 void radio_send(radio_handle *handle, const app_device_data *data)
 {
-    const char msg[] = "hello";
+    // static const char msg[] = "HELLOHELLOHELLOHELLO";
+    // for (int i = 0; i < 200; ++i)
+    // {
+    //     (void)RFM69_Send(&radio_rfm69_handle, /*to*/ 1, msg, sizeof msg - 1, /*reqACK*/ false);
+    //     HAL_Delay(80); // 80 ms between bursts
+    // }
+    // return;
+
+    const char msg[] = "hellohellohellohello";
     RFM69_Send(&radio_rfm69_handle, /*toAddress*/ 1, msg, sizeof msg - 1, /*requestACK*/ false);
 
     // if (RFM69_SendWithRetry(&radio_rfm69_handle, 1, msg, sizeof msg - 1, /*retries*/ 2, /*retryWaitMs*/ 30))

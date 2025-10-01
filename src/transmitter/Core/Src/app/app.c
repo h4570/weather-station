@@ -28,7 +28,7 @@ void app_init(app_handle *handle)
 // Debug
 #define SENSOR_CHECK_EVERY_SEC 2
 #define BATTERY_CHECK_EVERY_SEC 2
-#define RADIO_SEND_EVERY_SEC 2
+#define RADIO_SEND_EVERY_SEC 1
 
 void app_loop(app_handle *handle)
 {
@@ -73,7 +73,7 @@ void app_adc_conv_cplt_callback(app_handle *handle, ADC_HandleTypeDef *hadc)
 
 void app_gpio_exti_callback(app_handle *handle, const uint16_t pin)
 {
-    // radio_exti_interrupt_handler(pin);
+    radio_exti_interrupt_handler(pin);
 }
 
 void app_spi_tx_cplt_callback(app_handle *handle, SPI_HandleTypeDef *hspi)

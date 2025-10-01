@@ -76,6 +76,9 @@ void Error_Handler(void);
 #define DISP_RST_GPIO_Port GPIOB
 #define DISP_BUSY_Pin GPIO_PIN_2
 #define DISP_BUSY_GPIO_Port GPIOB
+#define RAD_DI0_Pin GPIO_PIN_10
+#define RAD_DI0_GPIO_Port GPIOB
+#define RAD_DI0_EXTI_IRQn EXTI15_10_IRQn
 #define DISP_SCK_Pin GPIO_PIN_13
 #define DISP_SCK_GPIO_Port GPIOB
 #define DISP_CS_Pin GPIO_PIN_14
@@ -90,8 +93,6 @@ void Error_Handler(void);
 #define RAD_CS_GPIO_Port GPIOD
 #define T_SWO_Pin GPIO_PIN_3
 #define T_SWO_GPIO_Port GPIOB
-#define RAD_DIO0_Pin GPIO_PIN_4
-#define RAD_DIO0_GPIO_Port GPIOB
 #define BME280_CS_Pin GPIO_PIN_5
 #define BME280_CS_GPIO_Port GPIOB
 
