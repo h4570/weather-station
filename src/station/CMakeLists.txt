@@ -69,13 +69,13 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/app/radio.c
     Core/Src/app/renderer.c
 
-    ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/shared/drivers/bme280_async.c 
-    ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/shared/drivers/bmpxx80.c 
-    ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/shared/drivers/rfm69.c 
-    ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/shared/drivers/spi_bus_manager.c 
-    ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/shared/battery.c 
-    ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/shared/hourly_clock.c 
-    ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/shared/sensor.c 
+    Shared/src/shared/drivers/bme280_async.c 
+    Shared/src/shared/drivers/bmpxx80.c 
+    Shared/src/shared/drivers/rfm69.c 
+    Shared/src/shared/drivers/spi_bus_manager.c 
+    Shared/src/shared/battery.c 
+    Shared/src/shared/hourly_clock.c 
+    Shared/src/shared/sensor.c 
 )
 
 # Add include paths
@@ -83,7 +83,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
     ${CMAKE_SOURCE_DIR}/../3rd-party/inc
 
-    ${CMAKE_CURRENT_SOURCE_DIR}/../shared/inc 
+    Shared/inc 
 )
 
 # Add project symbols (macros)
