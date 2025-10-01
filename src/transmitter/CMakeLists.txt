@@ -46,6 +46,7 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     Core/Src/app/app.c
+    Core/Src/app/radio.c
     Core/Src/app/shared_glue/bmpxx80_glue.c
     
     ${CMAKE_CURRENT_SOURCE_DIR}/../shared/src/shared/drivers/bme280_async.c 

@@ -19,7 +19,8 @@
 			"app_device_data.h": "c",
 			"sensor.h": "c",
 			"spi.h": "c",
-			"app.h": "c"
+			"app.h": "c",
+			"stdlib.h": "c"
 		}
 	}
 }

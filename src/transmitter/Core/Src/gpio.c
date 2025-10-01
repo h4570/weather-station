@@ -44,20 +44,20 @@ void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(BME280_CS_GPIO_Port, BME280_CS_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, RAD_CS_Pin|BME280_CS_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pins : RAD_CS_Pin BME280_CS_Pin */
+  GPIO_InitStruct.Pin = RAD_CS_Pin|BME280_CS_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pin : RAD_DI0_Pin */
   GPIO_InitStruct.Pin = RAD_DI0_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(RAD_DI0_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : BME280_CS_Pin */
-  GPIO_InitStruct.Pin = BME280_CS_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(BME280_CS_GPIO_Port, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
   HAL_NVIC_SetPriority(EXTI4_15_IRQn, 0, 0);

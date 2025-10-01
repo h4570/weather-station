@@ -59,6 +59,8 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define BAT_VCC_Pin GPIO_PIN_0
 #define BAT_VCC_GPIO_Port GPIOA
+#define RAD_CS_Pin GPIO_PIN_3
+#define RAD_CS_GPIO_Port GPIOB
 #define RAD_DI0_Pin GPIO_PIN_4
 #define RAD_DI0_GPIO_Port GPIOB
 #define RAD_DI0_EXTI_IRQn EXTI4_15_IRQn

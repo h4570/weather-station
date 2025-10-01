@@ -6,6 +6,7 @@
 #include "shared/hourly_clock.h"
 #include "shared/battery.h"
 #include "shared/sensor.h"
+#include "app/radio.h"
 
 #include "stm32l0xx_hal.h"
 #include "adc.h"
@@ -27,6 +28,7 @@ extern "C"
         hourly_clock_handle hclock;
         battery_handle battery;
         sensor_handle sensor;
+        radio_handle radio;
         spi_bus_manager spi_mgr;
         spi_bus_transaction app_spiq_storage[8];
         app_device_data local, last_local;

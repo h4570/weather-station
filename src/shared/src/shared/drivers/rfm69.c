@@ -21,7 +21,7 @@ void RFM69_WriteReg(RFM69_HandleTypeDef *hrf, uint8_t addr, uint8_t value)
 {
     uint8_t tx[2] = {(uint8_t)(addr | 0x80), value};
     RFM69_Select(hrf);
-    HAL_SPI_Transmit(hrf->hspi, tx, 2, HAL_MAX_DELAY);
+    HAL_StatusTypeDef res = HAL_SPI_Transmit(hrf->hspi, tx, 2, HAL_MAX_DELAY);
     RFM69_Unselect(hrf);
 }
 
