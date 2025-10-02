@@ -81,7 +81,7 @@ void app_init(app_handle *handle)
 void app_loop(app_handle *handle)
 {
     hourly_clock_update(&handle->hclock);
-    radio_loop(&handle->radio);
+    radio_loop(&handle->radio, &handle->remote);
     sensor_try_get(&handle->sensor, &handle->local);
 
     if (hourly_clock_check_elapsed(&handle->hclock, handle->last_sensor_read_time, SENSOR_CHECK_EVERY_SEC))
@@ -118,7 +118,7 @@ void app_loop(app_handle *handle)
         }
     }
 
-    display_loop(&handle->display, &handle->local, NULL, changes_detected);
+    display_loop(&handle->display, &handle->local, &handle->remote, changes_detected);
 
     HAL_Delay(1);
 }

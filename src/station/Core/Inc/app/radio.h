@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "stm32g4xx_hal.h"
+#include "shared/app_device_data.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -32,8 +33,10 @@ extern "C"
 
     /**
      * @brief Main loop function for the radio module
+     * @param handle Pointer to the radio handle
+     * @param out Pointer to the structure where received data will be stored
      */
-    void radio_loop(radio_handle *handle);
+    void radio_loop(radio_handle *handle, app_device_data *out);
 
     /**
      * @brief EXTI interrupt handler for the radio module (to be called from main EXTI handler)

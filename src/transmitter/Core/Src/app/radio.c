@@ -55,7 +55,7 @@ void radio_init(radio_handle *handle)
     radio_it_di0_pin = handle->dio0_pin;
 
     // przykładowa moc
-    RFM69_SetPowerDBm(&radio_rfm69_handle, 7);
+    RFM69_SetPowerDBm(&radio_rfm69_handle, 1);
 
     // To warto zassertować
     // uint8_t v = RFM69_GetVersion(&radio_rfm69_handle);
@@ -78,6 +78,8 @@ void radio_loop(radio_handle *handle)
     }
 }
 
+uint8_t packet[18]; // 1x byte 'S', 2x float, 2x int32_t, 1x byte 'E'
+
 void radio_send(radio_handle *handle, const app_device_data *data)
 {
     // static const char msg[] = "HELLOHELLOHELLOHELLO";
@@ -87,10 +89,21 @@ void radio_send(radio_handle *handle, const app_device_data *data)
     //     HAL_Delay(80); // 80 ms between bursts
     // }
     // return;
+    RFM69_SetMode(&radio_rfm69_handle, RF69_MODE_STANDBY);
+    while ((RFM69_ReadReg(&radio_rfm69_handle, REG_IRQFLAGS1) & RF_IRQFLAGS1_MODEREADY) == 0)
+    { /* wait */
+    }
 
-    const char msg[] = "hellohellohellohello";
-    RFM69_Send(&radio_rfm69_handle, /*toAddress*/ 1, msg, sizeof msg - 1, /*requestACK*/ false);
+    //
+    packet[0] = 'S';
+    memcpy(&packet[1], &data->temperature, sizeof data->temperature);
+    memcpy(&packet[5], &data->humidity, sizeof data->humidity);
+    memcpy(&packet[9], &data->pressure, sizeof data->pressure);
+    memcpy(&packet[13], &data->bat_in, sizeof data->bat_in);
+    packet[17] = 'E';
 
+    RFM69_Send(&radio_rfm69_handle, /*toAddress*/ 1, packet, sizeof packet, /*requestACK*/ false);
+    RFM69_Sleep(&radio_rfm69_handle);
     // if (RFM69_SendWithRetry(&radio_rfm69_handle, 1, msg, sizeof msg - 1, /*retries*/ 2, /*retryWaitMs*/ 30))
     // {
     //     // sukces

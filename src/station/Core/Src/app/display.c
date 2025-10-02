@@ -67,7 +67,7 @@ void display_loop(display_handle *handle, app_device_data *local, app_device_dat
     {
         renderer_execute(
             local->temperature, local->humidity, local->pressure, local->bat_in,
-            0.0f, 0.0f, 1000, 51);
+            remote->temperature, remote->humidity, remote->pressure, remote->bat_in);
 
         if (!handle->anything_was_rendered)
         {

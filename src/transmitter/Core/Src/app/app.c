@@ -28,7 +28,7 @@ void app_init(app_handle *handle)
 // Debug
 #define SENSOR_CHECK_EVERY_SEC 2
 #define BATTERY_CHECK_EVERY_SEC 2
-#define RADIO_SEND_EVERY_SEC 1
+#define RADIO_SEND_EVERY_SEC 2
 
 void app_loop(app_handle *handle)
 {
@@ -44,8 +44,14 @@ void app_loop(app_handle *handle)
     //     battery_update_temperature(&handle->battery, handle->local.temperature);
     // }
 
-    if (hourly_clock_check_elapsed(&handle->hclock, handle->last_sensor_read_time, RADIO_SEND_EVERY_SEC))
+    if (hourly_clock_check_elapsed(&handle->hclock, handle->last_radio_send_time, RADIO_SEND_EVERY_SEC))
     {
+        // DBG:
+        handle->local.temperature = 12.3F;
+        handle->local.humidity = 45.6F;
+        handle->local.pressure = 101325;
+        handle->local.bat_in = 3300;
+
         radio_send(&handle->radio, &handle->local);
         handle->last_radio_send_time = hourly_clock_get_timestamp(&handle->hclock);
     }
