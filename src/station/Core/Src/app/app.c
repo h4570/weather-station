@@ -2,29 +2,29 @@
 #include "stdlib.h"
 #include <math.h>
 
-static bool check_if_anything_changed_locally(app_handle *handle)
+static bool check_if_data_changed(const app_device_data *current, const app_device_data *last)
 {
     const float temp_threshold = 0.5F; // degrees Celsius
     const float hum_threshold = 1.0F;  // percentage
     const int32_t pres_threshold = 10; // Pascals
     const int32_t bat_threshold = 100; // millivolts
 
-    if (fabsf(handle->local.temperature - handle->last_local.temperature) >= temp_threshold)
+    if (fabsf(current->temperature - last->temperature) >= temp_threshold)
     {
         return true;
     }
 
-    if (fabsf(handle->local.humidity - handle->last_local.humidity) >= hum_threshold)
+    if (fabsf(current->humidity - last->humidity) >= hum_threshold)
     {
         return true;
     }
 
-    if (abs(handle->local.pressure - handle->last_local.pressure) >= pres_threshold)
+    if (abs(current->pressure - last->pressure) >= pres_threshold)
     {
         return true;
     }
 
-    if (abs(handle->local.bat_in - handle->last_local.bat_in) >= bat_threshold)
+    if (abs(current->bat_in - last->bat_in) >= bat_threshold)
     {
         return true;
     }
@@ -32,19 +32,19 @@ static bool check_if_anything_changed_locally(app_handle *handle)
     return false;
 }
 
-static void update_last_local_data(app_handle *handle)
+static void update_last_data(app_device_data *last, const app_device_data *current)
 {
-    handle->last_local.temperature = handle->local.temperature;
-    handle->last_local.humidity = handle->local.humidity;
-    handle->last_local.pressure = handle->local.pressure;
-    handle->last_local.bat_in = handle->local.bat_in;
+    last->temperature = current->temperature;
+    last->humidity = current->humidity;
+    last->pressure = current->pressure;
+    last->bat_in = current->bat_in;
 }
 
 void app_init(app_handle *handle)
 {
     handle->battery = battery_create(&hadc1);
     handle->hclock = hourly_clock_create(&hrtc);
-    handle->radio = radio_create(RAD_CS_GPIO_Port, RAD_CS_Pin, RAD_DI0_GPIO_Port, RAD_DI0_Pin, &hspi3);
+    handle->radio = radio_create(RAD_CS_GPIO_Port, RAD_CS_Pin, RAD_DI0_GPIO_Port, RAD_DI0_Pin, &hspi3, &handle->hclock);
     handle->spi_mgr = spi_bus_manager_create(&hspi2, handle->app_spiq_storage, (uint16_t)(sizeof(handle->app_spiq_storage) / sizeof(handle->app_spiq_storage[0])));
     handle->sensor = sensor_create(&handle->spi_mgr, &htim1, &hspi2, BME280_CS_GPIO_Port, BME280_CS_Pin);
     handle->display = display_create(&handle->spi_mgr);
@@ -81,7 +81,7 @@ void app_init(app_handle *handle)
 void app_loop(app_handle *handle)
 {
     hourly_clock_update(&handle->hclock);
-    radio_loop(&handle->radio, &handle->remote);
+    radio_loop(&handle->radio);
     sensor_try_get(&handle->sensor, &handle->local);
 
     if (hourly_clock_check_elapsed(&handle->hclock, handle->last_sensor_read_time, SENSOR_CHECK_EVERY_SEC))
@@ -109,12 +109,16 @@ void app_loop(app_handle *handle)
 
     if (hourly_clock_check_elapsed(&handle->hclock, handle->last_check_changes_time, DISPLAY_CHECK_CHANGES_EVERY_SEC))
     {
-        changes_detected = check_if_anything_changed_locally(handle);
+        handle->remote = radio_get_data(&handle->radio);
+        bool local_changes = check_if_data_changed(&handle->local, &handle->last_local);
+        bool remote_changes = check_if_data_changed(&handle->remote, &handle->last_remote);
+        changes_detected = local_changes || remote_changes;
         handle->last_check_changes_time = hourly_clock_get_timestamp(&handle->hclock);
 
         if (changes_detected)
         {
-            update_last_local_data(handle);
+            update_last_data(&handle->last_local, &handle->local);
+            update_last_data(&handle->last_remote, &handle->remote);
         }
     }
 

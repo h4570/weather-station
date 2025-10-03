@@ -77,6 +77,17 @@ void RFM69_SetMode(RFM69_HandleTypeDef *hrf, RFM69_Mode newMode)
 
 void RFM69_Sleep(RFM69_HandleTypeDef *hrf) { RFM69_SetMode(hrf, RF69_MODE_SLEEP); }
 
+bool RFM69_WaitModeReady(RFM69_HandleTypeDef *hrf, uint32_t timeout_ms)
+{
+    uint32_t start = HAL_GetTick();
+    while ((RFM69_ReadReg(hrf, REG_IRQFLAGS1) & RF_IRQFLAGS1_MODEREADY) == 0)
+    {
+        if (timeout_ms > 0 && (HAL_GetTick() - start) >= timeout_ms)
+            return false;
+    }
+    return true;
+}
+
 // ---- GETTERS/SETTERS ----
 uint8_t RFM69_GetVersion(RFM69_HandleTypeDef *hrf) { return RFM69_ReadReg(hrf, REG_VERSION); }
 
@@ -414,6 +425,16 @@ static void RFM69_InterruptHandler(RFM69_HandleTypeDef *hrf)
         RFM69_SetMode(hrf, RF69_MODE_RX);
     }
     hrf->RSSI = RFM69_ReadRSSI(hrf, false);
+}
+
+void RFM69_Consume(RFM69_HandleTypeDef *hrf)
+{
+    hrf->PAYLOADLEN = 0;
+    hrf->DATALEN = 0;
+    hrf->ACK_REQUESTED = 0;
+    hrf->ACK_RECEIVED = 0;
+    hrf->haveData = 0;
+    RFM69_SetMode(hrf, RF69_MODE_RX);
 }
 
 bool RFM69_ReceiveDone(RFM69_HandleTypeDef *hrf)

@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include "stm32g4xx_hal.h"
 #include "shared/app_device_data.h"
+#include "shared/hourly_clock.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -16,15 +17,28 @@ extern "C"
     {
         GPIO_TypeDef *cs_port;
         uint16_t cs_pin;
-        GPIO_TypeDef *dio0_port;
-        uint16_t dio0_pin;
+        GPIO_TypeDef *di0_port;
+        uint16_t di0_pin;
         SPI_HandleTypeDef *hspi;
+        hourly_clock_handle *clock;
+        bool is_initialized;
+        bool has_error;
+        app_device_data last_received_data;
+        app_device_data last_returned_data;
+        hourly_clock_timestamp_t last_receive_timestamp;
     } radio_handle;
 
     /**
      * @brief Create and initialize a radio handle
+     * @param cs_port GPIO port for Chip Select (CS)
+     * @param cs_pin GPIO pin for Chip Select (CS)
+     * @param dio0_port GPIO port for DI0 interrupt
+     * @param dio0_pin GPIO pin for DI0 interrupt
+     * @param hspi Pointer to the SPI handle
+     * @param clock Pointer to the hourly clock handle for timestamping
+     * @return radio_handle The initialized radio handle
      */
-    radio_handle radio_create(GPIO_TypeDef *cs_port, uint16_t cs_pin, GPIO_TypeDef *dio0_port, uint16_t dio0_pin, SPI_HandleTypeDef *hspi);
+    radio_handle radio_create(GPIO_TypeDef *cs_port, uint16_t cs_pin, GPIO_TypeDef *di0_port, uint16_t di0_pin, SPI_HandleTypeDef *hspi, hourly_clock_handle *clock);
 
     /**
      * @brief Initialize the radio module
@@ -34,9 +48,22 @@ extern "C"
     /**
      * @brief Main loop function for the radio module
      * @param handle Pointer to the radio handle
-     * @param out Pointer to the structure where received data will be stored
      */
-    void radio_loop(radio_handle *handle, app_device_data *out);
+    void radio_loop(radio_handle *handle);
+
+    /**
+     * @brief Check if new radio data has been received since last call to radio_get_data
+     * @param handle Pointer to the radio handle
+     * @return true if new data is available, false otherwise
+     */
+    bool radio_check_if_data_changed(radio_handle *handle);
+
+    /**
+     * @brief Get the last received radio data and mark it as returned
+     * @param handle Pointer to the radio handle
+     * @return app_device_data The last received data
+     */
+    app_device_data radio_get_data(radio_handle *handle);
 
     /**
      * @brief EXTI interrupt handler for the radio module (to be called from main EXTI handler)
