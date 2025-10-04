@@ -1,44 +1,5 @@
 #include "app/app.h"
-#include "stdlib.h"
-#include <math.h>
-
-static bool check_if_data_changed(const app_device_data *current, const app_device_data *last)
-{
-    const float temp_threshold = 0.5F; // degrees Celsius
-    const float hum_threshold = 1.0F;  // percentage
-    const int32_t pres_threshold = 10; // Pascals
-    const int32_t bat_threshold = 100; // millivolts
-
-    if (fabsf(current->temperature - last->temperature) >= temp_threshold)
-    {
-        return true;
-    }
-
-    if (fabsf(current->humidity - last->humidity) >= hum_threshold)
-    {
-        return true;
-    }
-
-    if (abs(current->pressure - last->pressure) >= pres_threshold)
-    {
-        return true;
-    }
-
-    if (abs(current->bat_in - last->bat_in) >= bat_threshold)
-    {
-        return true;
-    }
-
-    return false;
-}
-
-static void update_last_data(app_device_data *last, const app_device_data *current)
-{
-    last->temperature = current->temperature;
-    last->humidity = current->humidity;
-    last->pressure = current->pressure;
-    last->bat_in = current->bat_in;
-}
+#include <string.h>
 
 void app_init(app_handle *handle)
 {
@@ -110,15 +71,15 @@ void app_loop(app_handle *handle)
     if (hourly_clock_check_elapsed(&handle->hclock, handle->last_check_changes_time, DISPLAY_CHECK_CHANGES_EVERY_SEC))
     {
         handle->remote = radio_get_data(&handle->radio);
-        bool local_changes = check_if_data_changed(&handle->local, &handle->last_local);
-        bool remote_changes = check_if_data_changed(&handle->remote, &handle->last_remote);
+        bool local_changes = app_device_data_check_if_changed(&handle->local, &handle->last_local);
+        bool remote_changes = app_device_data_check_if_changed(&handle->remote, &handle->last_remote);
         changes_detected = local_changes || remote_changes;
         handle->last_check_changes_time = hourly_clock_get_timestamp(&handle->hclock);
 
         if (changes_detected)
         {
-            update_last_data(&handle->last_local, &handle->local);
-            update_last_data(&handle->last_remote, &handle->remote);
+            memcpy(&handle->last_local, &handle->local, sizeof(app_device_data));
+            memcpy(&handle->last_remote, &handle->remote, sizeof(app_device_data));
         }
     }
 

@@ -20,7 +20,10 @@
 			"sensor.h": "c",
 			"spi.h": "c",
 			"app.h": "c",
-			"stdlib.h": "c"
+			"stdlib.h": "c",
+			"stdint.h": "c",
+			"bmpxx80.h": "c",
+			"bmpxx80_glue.h": "c"
 		}
 	}
 }

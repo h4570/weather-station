@@ -21,7 +21,8 @@
 			"spi_bus_manager_glue.h": "c",
 			"math.h": "c",
 			"bmpxx80.h": "c",
-			"hourly_clock.h": "c"
+			"hourly_clock.h": "c",
+			"app_device_data.h": "c"
 		}
 	}
 }

@@ -2,10 +2,9 @@
 
 #include <stdint.h>
 
-#include "shared/drivers/spi_bus_manager.h"
 #include "shared/hourly_clock.h"
 #include "shared/battery.h"
-#include "shared/sensor.h"
+#include "app/sensor.h"
 #include "app/radio.h"
 
 #include "stm32l0xx_hal.h"
@@ -29,10 +28,7 @@ extern "C"
         battery_handle battery;
         sensor_handle sensor;
         radio_handle radio;
-        spi_bus_manager spi_mgr;
-        spi_bus_transaction app_spiq_storage[8];
         app_device_data local, last_local;
-        hourly_clock_timestamp_t last_sensor_read_time;
         hourly_clock_timestamp_t last_battery_read_time;
         hourly_clock_timestamp_t last_radio_send_time;
     } app_handle;
@@ -42,11 +38,6 @@ extern "C"
 
     void app_adc_conv_cplt_callback(app_handle *handle, ADC_HandleTypeDef *hadc);
     void app_gpio_exti_callback(app_handle *handle, const uint16_t pin);
-    void app_spi_tx_cplt_callback(app_handle *handle, SPI_HandleTypeDef *hspi);
-    void app_spi_tx_half_cplt_callback(app_handle *handle, SPI_HandleTypeDef *hspi);
-    void app_spi_txrx_cplt_callback(app_handle *handle, SPI_HandleTypeDef *hspi);
-    void app_spi_txrx_half_cplt_callback(app_handle *handle, SPI_HandleTypeDef *hspi);
-    void app_spi_error_callback(app_handle *handle, SPI_HandleTypeDef *hspi);
 
 #ifdef __cplusplus
 }

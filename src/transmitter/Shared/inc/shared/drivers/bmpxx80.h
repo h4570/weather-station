@@ -12,18 +12,12 @@
 #pragma once
 
 #include "app/shared_glue/bmpxx80_glue.h"
+#include "stdbool.h"
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
-
-//
-//	Settings
-//	Choose sensor
-//
-#define BME280
-#define BMP_SPI 1
 
 //
 // I2C address
@@ -242,10 +236,10 @@ extern "C"
     // User functions
     //
 
-    void BMPxx_init(GPIO_TypeDef *port, uint16_t pin);
+    void BMPxx_Spi_CS_Init(GPIO_TypeDef *port, uint16_t pin);
 
 #ifdef BMP180
-    void BMP180_Init(I2C_HandleTypeDef *i2c_handler, uint8_t mode);
+    bool BMP180_Init(I2C_HandleTypeDef *i2c_handler, uint8_t mode);
 
     float BMP180_ReadTemperature(void);
     int32_t BMP180_ReadPressure(void);
@@ -255,10 +249,10 @@ extern "C"
 #endif
 #ifdef BMP280
 #if (BMP_I2C == 1)
-    void BMP280_Init(I2C_HandleTypeDef *i2c_handler, uint8_t temperature_resolution, uint8_t pressure_oversampling, uint8_t mode);
+    bool BMP280_Init(I2C_HandleTypeDef *i2c_handler, uint8_t temperature_resolution, uint8_t pressure_oversampling, uint8_t mode);
 #endif
 #if (BMP_SPI == 1)
-    void BMP280_Init(SPI_HandleTypeDef *spi_handler, uint8_t temperature_resolution, uint8_t pressure_oversampling, uint8_t mode);
+    bool BMP280_Init(SPI_HandleTypeDef *spi_handler, uint8_t temperature_resolution, uint8_t pressure_oversampling, uint8_t mode);
 #endif
     void BMP280_SetConfig(uint8_t standby_time, uint8_t filter);
 
@@ -270,10 +264,10 @@ extern "C"
 #endif
 #ifdef BME280
 #if (BMP_I2C == 1)
-    void BME280_Init(I2C_HandleTypeDef *i2c_handler, uint8_t temperature_resolution, uint8_t pressure_oversampling, uint8_t humidity_oversampling, uint8_t mode);
+    bool BME280_Init(I2C_HandleTypeDef *i2c_handler, uint8_t temperature_resolution, uint8_t pressure_oversampling, uint8_t humidity_oversampling, uint8_t mode);
 #endif
 #if (BMP_SPI == 1)
-    void BME280_Init(SPI_HandleTypeDef *spi_handler, uint8_t temperature_resolution, uint8_t pressure_oversampling, uint8_t humidity_oversampling, uint8_t mode);
+    bool BME280_Init(SPI_HandleTypeDef *spi_handler, uint8_t temperature_resolution, uint8_t pressure_oversampling, uint8_t humidity_oversampling, uint8_t mode);
 #endif
     void BME280_SetConfig(uint8_t standby_time, uint8_t filter);
 

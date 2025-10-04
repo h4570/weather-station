@@ -4,7 +4,7 @@
 
 #include "shared/hourly_clock.h"
 #include "shared/battery.h"
-#include "shared/sensor.h"
+#include "app/sensor.h"
 #include "app/display.h"
 #include "app/radio.h"
 #include "shared/drivers/spi_bus_manager.h"

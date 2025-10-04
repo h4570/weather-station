@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include "stm32l0xx_hal.h"
 #include "shared/app_device_data.h"
+#include "shared/hourly_clock.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -19,12 +20,24 @@ extern "C"
         GPIO_TypeDef *dio0_port;
         uint16_t dio0_pin;
         SPI_HandleTypeDef *hspi;
+        hourly_clock_handle *clock;
+        bool is_initialized;
+        bool has_error;
+        hourly_clock_timestamp_t last_send_timestamp;
+        uint8_t packet[18];
     } radio_handle;
 
     /**
      * @brief Create and initialize a radio handle
+     * @param cs_port GPIO port for Chip Select (CS)
+     * @param cs_pin GPIO pin for Chip Select (CS)
+     * @param dio0_port GPIO port for DI0 interrupt
+     * @param dio0_pin GPIO pin for DI0 interrupt
+     * @param hspi Pointer to the SPI handle
+     * @param clock Pointer to the hourly clock handle for timestamping
+     * @return Initialized radio handle
      */
-    radio_handle radio_create(GPIO_TypeDef *cs_port, uint16_t cs_pin, GPIO_TypeDef *dio0_port, uint16_t dio0_pin, SPI_HandleTypeDef *hspi);
+    radio_handle radio_create(GPIO_TypeDef *cs_port, uint16_t cs_pin, GPIO_TypeDef *dio0_port, uint16_t dio0_pin, SPI_HandleTypeDef *hspi, hourly_clock_handle *clock);
 
     /**
      * @brief Initialize the radio module

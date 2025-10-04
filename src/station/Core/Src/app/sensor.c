@@ -1,4 +1,4 @@
-#include "shared/sensor.h"
+#include "app/sensor.h"
 #include "gpio.h"
 #include "tim.h"
 
@@ -19,7 +19,7 @@ void sensor_init(sensor_handle *handle)
     HAL_TIM_Base_Start(handle->sensor_tim);
 
     // Legacy init — ustawia kalibrację i NORMALMODE (ciągła konwersja)
-    BMPxx_init(handle->cs_port, handle->cs_pin);
+    BMPxx_Spi_CS_Init(handle->cs_port, handle->cs_pin);
     BME280_Init(handle->sensor_spi,
                 BME280_TEMPERATURE_16BIT,
                 BME280_PRESSURE_ULTRALOWPOWER,

@@ -46,16 +46,15 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     Core/Src/app/app.c
+    Core/Src/app/sensor.c 
     Core/Src/app/radio.c
     Core/Src/app/shared_glue/bmpxx80_glue.c
     
-    Shared/src/shared/drivers/bme280_async.c 
     Shared/src/shared/drivers/bmpxx80.c 
     Shared/src/shared/drivers/rfm69.c 
-    Shared/src/shared/drivers/spi_bus_manager.c 
+    Shared/src/shared/app_device_data.c 
     Shared/src/shared/battery.c 
     Shared/src/shared/hourly_clock.c 
-    Shared/src/shared/sensor.c 
 )
 
 # Add include paths
