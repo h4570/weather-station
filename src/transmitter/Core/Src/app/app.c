@@ -3,6 +3,8 @@
 
 void app_init(app_handle *handle, void (*system_clock_config_func)(void))
 {
+    HAL_Delay(50); // Wait for power to stabilize
+
     handle->system_clock_config_func = system_clock_config_func;
     handle->battery = battery_create(&hadc);
     handle->hclock = hourly_clock_create(&hrtc);
@@ -18,15 +20,11 @@ void app_init(app_handle *handle, void (*system_clock_config_func)(void))
     handle->last_radio_send_time = hourly_clock_get_timestamp(&handle->hclock);
 }
 
-// TODO:
-// - Realny układ zasilania, 2 baterie + step-up + pomiar napięcia
-// - Wyciągnięcie has_error do bme280
-// - LED, który poinformuje o błędzie radia/bme280 (mryganie w interwałach)
-
 #ifdef DEBUG
 #define INTERVAL_SEC 5
 #else
-#define INTERVAL_SEC 54
+#define INTERVAL_SEC 5
+// #define INTERVAL_SEC 54
 #endif
 
 static void app_enter_low_power_mode(app_handle *handle, uint32_t seconds)

@@ -38,7 +38,7 @@ extern "C"
      *
      * @return true if the read was successfully triggered, false if the sensor is busy
      */
-    bool sensor_kick(sensor_handle *handle);
+    bool sensor_normal_kick(sensor_handle *handle);
 
     /**
      * @brief Try to get the latest sensor readings if available.
@@ -46,7 +46,15 @@ extern "C"
      * @param out Pointer to app_device_data structure to fill with the latest readings
      * @return true if new data was available and copied to out, false otherwise
      */
-    bool sensor_try_get(sensor_handle *handle, app_device_data *out);
+    bool sensor_normal_try_get(sensor_handle *handle, app_device_data *out);
+
+    /**
+     * @brief Perform a blocking read of the sensor in FORCEDMODE. This will trigger a measurement and wait for it to complete.
+     *
+     * @param out Pointer to app_device_data structure to fill with the latest readings
+     * @return true if the read was successful, false otherwise
+     */
+    bool sensor_forced_get(sensor_handle *handle, app_device_data *out);
 
 #ifdef __cplusplus
 }

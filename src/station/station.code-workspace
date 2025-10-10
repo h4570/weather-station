@@ -22,7 +22,9 @@
 			"math.h": "c",
 			"bmpxx80.h": "c",
 			"hourly_clock.h": "c",
-			"app_device_data.h": "c"
+			"app_device_data.h": "c",
+			"random": "c",
+			"bme280_async.h": "c"
 		}
 	}
 }

@@ -3,6 +3,8 @@
 
 void app_init(app_handle *handle)
 {
+    HAL_Delay(50); // Wait for power to stabilize
+
     handle->battery = battery_create(&hadc1);
     handle->hclock = hourly_clock_create(&hrtc);
     handle->radio = radio_create(RAD_CS_GPIO_Port, RAD_CS_Pin, RAD_DI0_GPIO_Port, RAD_DI0_Pin, &hspi3, &handle->hclock);
@@ -25,7 +27,6 @@ void app_init(app_handle *handle)
 }
 
 // Plan:
-// - Obsługa błędów na wyświetlaczu
 // - Przejście na 80MHz, pod docelowy zegar
 // - Dodać usypianie i budzenie co np. 59s (RTC wakeup?)
 
@@ -41,17 +42,18 @@ void app_init(app_handle *handle)
 
 void app_loop(app_handle *handle)
 {
+    HAL_Delay(50);
+
     hourly_clock_update(&handle->hclock);
-    radio_loop(&handle->radio);
-    sensor_try_get(&handle->sensor, &handle->local);
 
     if (hourly_clock_check_elapsed(&handle->hclock, handle->last_sensor_read_time, SENSOR_CHECK_EVERY_SEC))
     {
-        sensor_kick(&handle->sensor);
-
+        sensor_forced_get(&handle->sensor, &handle->local);
         handle->last_sensor_read_time = hourly_clock_get_timestamp(&handle->hclock);
         battery_update_temperature(&handle->battery, handle->local.temperature);
     }
+
+    radio_loop(&handle->radio);
 
     if (hourly_clock_check_elapsed(&handle->hclock, handle->last_battery_read_time, BATTERY_CHECK_EVERY_SEC))
     {

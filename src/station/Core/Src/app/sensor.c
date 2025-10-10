@@ -13,6 +13,17 @@ sensor_handle sensor_create(spi_bus_manager *spi_mgr, TIM_HandleTypeDef *sensor_
     return handle;
 }
 
+static void sensor_init_normal(sensor_handle *handle)
+{
+    uint32_t cr1 = handle->sensor_spi->Instance->CR1;
+    uint32_t cr2 = handle->sensor_spi->Instance->CR2;
+
+    // Init async warstwy
+    bme280_async_init(&handle->bme_async, handle->spi_mgr,
+                      (spi_bus_gpio){.port = handle->cs_port, .pin = handle->cs_pin, .active_low = true},
+                      cr1, cr2);
+}
+
 void sensor_init(sensor_handle *handle)
 {
     // Timer do delay_us w legacy kodzie
@@ -24,27 +35,19 @@ void sensor_init(sensor_handle *handle)
                 BME280_TEMPERATURE_16BIT,
                 BME280_PRESSURE_ULTRALOWPOWER,
                 BME280_HUMIDITY_STANDARD,
-                BME280_NORMALMODE);
+                BME280_FORCEDMODE);
     BME280_SetConfig(BME280_STANDBY_MS_1000, BME280_FILTER_OFF);
 
-    // Przygotuj CR1/CR2 snapshot dla BME280 (8-bit data, CPOL/CPHA wg Twojej konfiguracji sensor_spi)
-    // Najprościej: skopiuj aktualne rejestry z sensor_spi po jego init.
-    uint32_t cr1 = handle->sensor_spi->Instance->CR1;
-    uint32_t cr2 = handle->sensor_spi->Instance->CR2;
-
-    // Init async warstwy
-    bme280_async_init(&handle->bme_async, handle->spi_mgr,
-                      (spi_bus_gpio){.port = handle->cs_port, .pin = handle->cs_pin, .active_low = true},
-                      cr1, cr2);
+    // sensor_init_normal(handle);
 }
 
-bool sensor_kick(sensor_handle *handle)
+bool sensor_normal_kick(sensor_handle *handle)
 {
     // Zleca jednorazowy burst-read (9 bajtów) P/T/H przez DMA. Nieblokujące.
     return bme280_async_trigger_read(&handle->bme_async);
 }
 
-bool sensor_try_get(sensor_handle *handle, app_device_data *out)
+bool sensor_normal_try_get(sensor_handle *handle, app_device_data *out)
 {
     if (!bme280_async_has_data(&handle->bme_async))
         return false;
@@ -59,4 +62,9 @@ bool sensor_try_get(sensor_handle *handle, app_device_data *out)
     out->humidity = m.humidity;
 
     return true;
+}
+
+bool sensor_forced_get(sensor_handle *handle, app_device_data *out)
+{
+    BME280_ReadTemperatureAndPressureAndHumidity(&out->temperature, &out->pressure, &out->humidity);
 }
