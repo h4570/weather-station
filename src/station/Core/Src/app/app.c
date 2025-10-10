@@ -27,8 +27,7 @@ void app_init(app_handle *handle)
 }
 
 // Plan:
-// - Przejście na 80MHz, pod docelowy zegar
-// - Dodać usypianie i budzenie co np. 59s (RTC wakeup?)
+// - Dodać system usypiania, budzenia się po 59s, czekanie na radio, ew. odświeżenie i usypianie
 
 // // Release
 // #define SENSOR_CHECK_EVERY_SEC 60
