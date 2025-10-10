@@ -1,9 +1,10 @@
 #include "app/app.h"
 #include "stdlib.h"
 
-void app_init(app_handle *handle)
+void app_init(app_handle *handle, void (*system_clock_config_func)(void))
 {
-    // handle->battery = battery_create(&hadc);
+    handle->system_clock_config_func = system_clock_config_func;
+    handle->battery = battery_create(&hadc);
     handle->hclock = hourly_clock_create(&hrtc);
     handle->sensor = sensor_create(&htim2, &hi2c1);
     handle->radio = radio_create(RAD_CS_GPIO_Port, RAD_CS_Pin, RAD_DI0_GPIO_Port, RAD_DI0_Pin, &hspi1, &handle->hclock);
@@ -11,48 +12,61 @@ void app_init(app_handle *handle)
     radio_init(&handle->radio);
     sensor_init(&handle->sensor);
 
-    // battery_request_read(&handle->battery);
+    battery_request_read(&handle->battery);
 
     handle->last_battery_read_time = hourly_clock_get_timestamp(&handle->hclock);
     handle->last_radio_send_time = hourly_clock_get_timestamp(&handle->hclock);
 }
 
 // TODO:
-// - Low power
-// - Timeout do BME280_Init
+// - Realny układ zasilania, 2 baterie + step-up + pomiar napięcia
 // - Wyciągnięcie has_error do bme280
 // - LED, który poinformuje o błędzie radia/bme280 (mryganie w interwałach)
 
-// Release
-// #define INTERVAL_SEC 600
+#ifdef DEBUG
+#define INTERVAL_SEC 5
+#else
+#define INTERVAL_SEC 54
+#endif
 
-// Debug
-#define INTERVAL_SEC 2
+static void app_enter_low_power_mode(app_handle *handle, uint32_t seconds)
+{
+    HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, seconds, RTC_WAKEUPCLOCK_CK_SPRE_16BITS);
+    HAL_SuspendTick();
+
+    HAL_PWR_EnterSTOPMode(PWR_MAINREGULATOR_ON, PWR_STOPENTRY_WFI);
+
+    HAL_ResumeTick();
+    HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
+    handle->system_clock_config_func();
+}
 
 void app_loop(app_handle *handle)
 {
     hourly_clock_update(&handle->hclock);
     radio_loop(&handle->radio);
 
-    if (hourly_clock_check_elapsed(&handle->hclock, handle->last_radio_send_time, INTERVAL_SEC))
     {
-        // {
-        //     battery_refresh(&handle->battery);
+        battery_refresh(&handle->battery);
 
-        //     if (battery_check_if_level_changed(&handle->battery))
-        //     {
-        //         handle->local.bat_in = battery_get_level(&handle->battery);
-        //     }
+        if (battery_check_if_level_changed(&handle->battery))
+        {
+            handle->local.bat_in = battery_get_level(&handle->battery);
+        }
 
-        //     battery_request_read(&handle->battery);
-        // }
-
-        sensor_read(&handle->sensor, &handle->local);
-
-        radio_send(&handle->radio, &handle->local);
-
-        handle->last_radio_send_time = hourly_clock_get_timestamp(&handle->hclock);
+        battery_request_read(&handle->battery);
     }
+
+    sensor_read(&handle->sensor, &handle->local);
+    battery_update_temperature(&handle->battery, handle->local.temperature);
+
+    radio_send(&handle->radio, &handle->local);
+
+#if DEBUG
+    HAL_Delay(INTERVAL_SEC * 1000);
+#else
+    app_enter_low_power_mode(handle, INTERVAL_SEC);
+#endif
 
     HAL_Delay(1);
 }

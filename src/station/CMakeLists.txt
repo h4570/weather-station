@@ -37,6 +37,12 @@ add_executable(${CMAKE_PROJECT_NAME})
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
 
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE DEBUG)
+elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE NDEBUG)
+endif()
+
 # !!! LV_CONF_PATH and LV_BUILD_CONF_PATH is set in `cmake/gcc-arm-none-eabi.cmake`
 
 set(CONFIG_LV_BUILD_DEMOS OFF)

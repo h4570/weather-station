@@ -26,8 +26,8 @@ void app_init(app_handle *handle)
 
 // Plan:
 // - Obsługa błędów na wyświetlaczu
-// - Dodać usypianie i budzenie co np. 9s (RTC wakeup?)
-// - Przerobić na dwa projekty i wspólny kod między nimi
+// - Przejście na 80MHz, pod docelowy zegar
+// - Dodać usypianie i budzenie co np. 59s (RTC wakeup?)
 
 // // Release
 // #define SENSOR_CHECK_EVERY_SEC 60

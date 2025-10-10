@@ -24,6 +24,7 @@ extern "C"
      */
     typedef struct
     {
+        void (*system_clock_config_func)(void); /**< Function pointer to system clock configuration function */
         hourly_clock_handle hclock;
         battery_handle battery;
         sensor_handle sensor;
@@ -33,7 +34,7 @@ extern "C"
         hourly_clock_timestamp_t last_radio_send_time;
     } app_handle;
 
-    void app_init(app_handle *handle);
+    void app_init(app_handle *handle, void (*system_clock_config_func)(void));
     void app_loop(app_handle *handle);
 
     void app_adc_conv_cplt_callback(app_handle *handle, ADC_HandleTypeDef *hadc);

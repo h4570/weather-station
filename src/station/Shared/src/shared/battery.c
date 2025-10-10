@@ -105,7 +105,7 @@ void battery_refresh(battery_handle *handle)
 {
     handle->current_adc_value = battery_vcc_adc_value;
 
-    if (handle->current_adc_value != handle->last_returned_bat_level)
+    if (handle->current_adc_value != handle->previous_adc_value)
     {
         // 2x AA battery, voltage divider 100k/100k, ADC 12-bit, Vref = 3.3V
         float battery_voltage = battery_nimh_calc_get_voltage_for_soc(handle->current_adc_value, 3.3F, 2.0F);
